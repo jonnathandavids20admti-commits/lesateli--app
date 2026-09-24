@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LesAteliê — Amigurumis feitos à mão</title>
+<meta name="description" content="LesAteliê — amigurumis feitos à mão, sob encomenda. Peças únicas, feitas com carinho.">
+<meta property="og:title" content="LesAteliê — Amigurumis feitos à mão">
+<meta property="og:description" content="Peças únicas, feitas à mão e sob encomenda. Confira nossa coleção de amigurumis.">
+<meta property="og:type" content="website">
+<!-- Para a prévia mostrar uma foto ao compartilhar no WhatsApp/Instagram, troque o link abaixo pelo de uma foto sua
+     hospedada em algum lugar público (ex.: Firebase Storage, Imgur). Uma foto "data:" salva no navegador não funciona
+     aqui, porque o WhatsApp/Instagram precisam baixar a imagem de um link público. -->
+<!-- <meta property="og:image" content="https://SEU-LINK-DE-IMAGEM-AQUI.jpg"> -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="LesAteliê — Amigurumis feitos à mão">
+<meta name="twitter:description" content="Peças únicas, feitas à mão e sob encomenda.">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#B96A5B">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -533,6 +544,19 @@
   </div>
 </div>
 
+<div class="overlay hide" id="publicOrderOverlay">
+  <div class="panel">
+    <button class="modal-close" id="publicOrderClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <h3 style="font-family:var(--font-display); margin:0 0 18px;">Status do pedido</h3>
+    <div id="publicOrderBody">
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:0;">Pra sua segurança, digite os 4 últimos números do telefone usado no pedido:</p>
+      <input id="publicOrderPhoneInput" type="tel" inputmode="numeric" maxlength="4" placeholder="0000" style="width:100px;text-align:center;letter-spacing:2px;font-size:16px;border-radius:8px;border:1px solid var(--line);padding:8px;background:var(--card);color:var(--ink);">
+      <button class="btn btn-primary" id="publicOrderVerify" style="margin-left:8px;">Ver status</button>
+      <p id="publicOrderErr" style="color:var(--badge);font-size:12.5px;margin-top:10px;"></p>
+    </div>
+  </div>
+</div>
+
 <div class="side-menu-overlay hide" id="sideMenuOverlay"></div>
 <div class="side-menu" id="sideMenu">
   <button class="side-menu-close" id="sideMenuClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -690,6 +714,13 @@
         <p class="ap-desc">Crie códigos que o cliente digita no carrinho para ganhar um desconto percentual sobre o subtotal.</p>
         <div id="couponsBody"></div>
         <button class="btn btn-ghost btn-full" id="couponAdd" style="margin-top:12px;">+ Adicionar cupom</button>
+        <div class="opt-label" style="margin:22px 0 6px;">Desconto automático de primeira compra</div>
+        <p class="ap-desc" style="margin-top:0;">Aplicado sozinho no carrinho — sem precisar de código — para clientes logados que nunca fecharam um pedido antes.</p>
+        <div class="form-field" style="max-width:220px;">
+          <label>Desconto (%) — 0 para desativar</label>
+          <input id="firstPurchasePctInput" type="number" step="1" min="0" max="100" placeholder="0">
+        </div>
+        <button class="btn btn-outline" id="firstPurchaseSave">Salvar desconto de primeira compra</button>
       </div>
 
       <div class="admin-panel hide" id="adminTextsPanel">
@@ -828,7 +859,7 @@
       <label>Senha</label>
       <input type="password" id="adminPass" placeholder="••••••••">
     </div>
-    <div id="adminLoginError" style="color:var(--badge); font-size:12.5px; margin-bottom:8px; display:none;">Senha incorreta.</div>
+    <div id="adminLoginError" style="color:var(--badge); font-size:12.5px; margin-bottom:8px; display:none;">Senha incorreta ou sem conexão com o servidor.</div>
     <button class="btn btn-primary btn-full" id="adminLoginSubmit">Entrar</button>
   </div>
 </div>
@@ -1285,10 +1316,12 @@
     deliveryMethod: 'entrega', // 'entrega' ou 'retirada'
     dbAvailable: false,
     dbCol: null,
-    contentDoc: null
+    contentDoc: null,
+    firstPurchaseChecked: false,
+    isFirstPurchase: false
   };
 
-  var ADMIN_PASS = '0402';
+  var ADMIN_EMAIL = 'admin@lesatelie.com';
 
   function fmt(v){ return 'R$ ' + v.toFixed(2).replace('.', ','); }
   function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1515,6 +1548,18 @@
       listenProducts();
       auth.onAuthStateChanged(function(user){
         currentUser = user;
+        state.firstPurchaseChecked = false;
+        state.isFirstPurchase = false;
+        if(user && user.email === ADMIN_EMAIL){
+          // É a conta da loja logando como administradora — não é um cliente comum,
+          // então não busca/mostra dados de "conta de cliente" pra ela.
+          state.isAdmin = true;
+          currentCustomer = null;
+          applyAdminUI();
+          return;
+        }
+        state.isAdmin = false;
+        applyAdminUI();
         if(user && db){
           db.collection('customers').doc(user.uid).get().then(function(snap){
             currentCustomer = snap.exists ? snap.data() : {};
@@ -1898,6 +1943,88 @@
   document.getElementById('favBtn').addEventListener('click', openFavOverlay);
   document.getElementById('favClose').addEventListener('click', function(){ document.getElementById('favOverlay').classList.add('hide'); });
   document.getElementById('favOverlay').addEventListener('click', function(e){ if(e.target.id==='favOverlay') document.getElementById('favOverlay').classList.add('hide'); });
+
+  /* ---------------- CONSULTA PÚBLICA DE STATUS (link ?pedido=ID, sem precisar logar) ---------------- */
+  // OBS.: isto lê o pedido pelo ID exato (não lista todos), então o link só funciona pra quem o recebeu.
+  // Para isso funcionar, as regras do Firestore precisam permitir leitura de UM pedido pelo ID
+  // (ex.: "allow get: if true;") mesmo mantendo "allow list: if false;" pra ninguém listar todos os pedidos.
+  function orderShareUrl(orderId){
+    return location.origin + location.pathname + '?pedido=' + orderId;
+  }
+  // Tenta a API moderna de área de transferência; se não estiver disponível (navegador antigo,
+  // página aberta sem https, etc.), cai pro jeito antigo com um campo de texto invisível.
+  function copyToClipboard(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function(resolve, reject){
+      try{
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject();
+      }catch(e){ reject(e); }
+    });
+  }
+  function renderPublicOrder(o){
+    var itemsTxt = (o.items||[]).map(function(it){ return it.qty+'x '+it.name; }).join(', ');
+    var orderNo = o.orderNumber ? '#'+String(o.orderNumber).padStart(6,'0') : '';
+    var first = (o.customer && o.customer.name) ? o.customer.name.split(' ')[0] : '';
+    document.getElementById('publicOrderBody').innerHTML =
+      '<div style="font-size:13px;color:var(--ink-soft);">'+(first?'Olá, '+first+'! ':'')+'Pedido '+orderNo+'</div>'
+      +'<div style="font-size:13.5px;margin-top:8px;">'+esc(itemsTxt)+'</div>'
+      +'<div style="font-weight:600;margin-top:8px;color:'+statusColor(o.productionStatus)+';">'+(PRODUCTION_LABELS[o.productionStatus]||o.productionStatus)+'</div>'
+      +renderTimeline(o);
+  }
+  // Só busca o pedido no banco depois que o visitante confirmar os 4 últimos dígitos do
+  // telefone usado na compra — assim, quem só encontrou/adivinhou o link não vê nada sozinho.
+  // IMPORTANTE: essa checagem roda no navegador, então ela reforça a privacidade pra quem usa
+  // o link normalmente, mas a proteção "de verdade" continua sendo a regra do Firestore que
+  // permite ler UM pedido por ID exato, sem permitir listar todos.
+  function resetPublicOrderForm(){
+    document.getElementById('publicOrderBody').innerHTML =
+      '<p style="color:var(--ink-soft);font-size:13px;margin-top:0;">Pra sua segurança, digite os 4 últimos números do telefone usado no pedido:</p>'
+      +'<input id="publicOrderPhoneInput" type="tel" inputmode="numeric" maxlength="4" placeholder="0000" style="width:100px;text-align:center;letter-spacing:2px;font-size:16px;border-radius:8px;border:1px solid var(--line);padding:8px;background:var(--card);color:var(--ink);">'
+      +'<button class="btn btn-primary" id="publicOrderVerify" style="margin-left:8px;">Ver status</button>'
+      +'<p id="publicOrderErr" style="color:var(--badge);font-size:12.5px;margin-top:10px;"></p>';
+  }
+  function openPublicOrder(orderId){
+    document.getElementById('publicOrderOverlay').classList.remove('hide');
+    resetPublicOrderForm();
+    document.getElementById('publicOrderVerify').onclick = function(){
+      var digits = document.getElementById('publicOrderPhoneInput').value.replace(/\D/g,'');
+      var errEl = document.getElementById('publicOrderErr');
+      errEl.textContent = '';
+      if(digits.length !== 4){ errEl.textContent = 'Digite os 4 últimos números do telefone.'; return; }
+      var tryFetch = function(){
+        db.collection('orders').doc(orderId).get().then(function(snap){
+          if(!snap.exists){ errEl.textContent = 'Pedido não encontrado.'; return; }
+          var o = normalizeOrder(Object.assign({id:orderId}, snap.data()));
+          var phoneDigits = String((o.customer && o.customer.phone) || '').replace(/\D/g,'');
+          if(!phoneDigits || phoneDigits.slice(-4) !== digits){ errEl.textContent = 'Os números não conferem. Confira o link recebido.'; return; }
+          renderPublicOrder(o);
+        }).catch(function(){ errEl.textContent = 'Não foi possível carregar este pedido agora.'; });
+      };
+      if(db) tryFetch(); else setTimeout(function(){ if(db) tryFetch(); else errEl.textContent = 'Servidor indisponível no momento.'; }, 1200);
+    };
+    document.getElementById('publicOrderPhoneInput').addEventListener('keydown', function(e){
+      if(e.key==='Enter') document.getElementById('publicOrderVerify').click();
+    });
+  }
+  document.getElementById('publicOrderClose').addEventListener('click', function(){
+    document.getElementById('publicOrderOverlay').classList.add('hide');
+    history.replaceState(null, '', location.pathname);
+  });
+  document.getElementById('publicOrderOverlay').addEventListener('click', function(e){ if(e.target.id==='publicOrderOverlay') document.getElementById('publicOrderClose').click(); });
+  (function checkPublicOrderLink(){
+    var id = new URLSearchParams(window.location.search).get('pedido');
+    if(id) openPublicOrder(id);
+  })();
   document.body.addEventListener('click', function(e){
     var favBtn = e.target.closest('[data-fav]');
     if(!favBtn) return;
@@ -2250,13 +2377,19 @@
       shippingRow.classList.add('hide');
       note.textContent = 'Combine com a loja o endereço e o horário para retirar seu pedido.';
     }
-    var discount = state.appliedCoupon ? subtotal * (Number(state.appliedCoupon.percent)||0) / 100 : 0;
+    var effCoupon = effectiveCoupon();
+    var discount = effCoupon ? subtotal * (Number(effCoupon.percent)||0) / 100 : 0;
     var discRow = document.getElementById('cartDiscountRow');
     if(discount > 0){
       discRow.classList.remove('hide');
       document.getElementById('cartDiscount').textContent = '- ' + fmt(discount);
     } else {
       discRow.classList.add('hide');
+    }
+    var couponMsg = document.getElementById('couponMsg');
+    if(effCoupon && effCoupon.auto && couponMsg && !couponMsg.textContent){
+      couponMsg.style.color = 'var(--rose-dark)';
+      couponMsg.textContent = '🎉 Como é sua primeira compra, você já ganhou ' + effCoupon.percent + '% de desconto automático!';
     }
     var gcfg = getGiftConfig();
     var cardOn = !!MP_CREATE_URL; if(!cardOn) state.payMethod = 'pix';
@@ -2319,6 +2452,7 @@
   });
 
   document.getElementById('cartBtn').addEventListener('click', function(){
+    checkFirstPurchase();
     renderCart();
     document.getElementById('cartOverlay').classList.remove('hide');
   });
@@ -2404,6 +2538,45 @@
     return L.join('\n');
   }
 
+  // Limpa um telefone digitado de qualquer jeito e garante o código do Brasil (55) na frente,
+  // pronto para montar um link "wa.me". Devolve null se não tiver dígitos suficientes.
+  function phoneToWhatsApp(phone){
+    var digits = String(phone||'').replace(/\D/g,'');
+    if(!digits) return null;
+    if(digits.length <= 11) digits = '55' + digits; // sem DDI: assume Brasil
+    return digits;
+  }
+  // Monta o aviso de status pra mandar pro cliente. Isso NÃO envia nada sozinho — abre o
+  // WhatsApp já com o texto pronto, e quem manda de fato é a loja, com um clique em "Enviar".
+  // (Envio 100% automático, sem esse clique, exigiria um servidor com a API oficial do WhatsApp.)
+  function buildStatusUpdateMessage(order){
+    var c = order.customer || {};
+    var orderNo = order.orderNumber ? '#'+String(order.orderNumber).padStart(6,'0') : '';
+    var L = [];
+    L.push('Olá' + (c.name ? ', ' + c.name.split(' ')[0] : '') + '! Aqui é do LesAteliê 💛');
+    L.push('Novidade sobre seu pedido ' + orderNo + ':');
+    if(order.paymentStatus === 'recusado'){
+      L.push('*Não conseguimos confirmar o pagamento.* Pode nos mandar o comprovante de novo ou tentar outra forma de pagamento?');
+    } else {
+      L.push('*' + (PRODUCTION_LABELS[order.productionStatus] || '-') + '*');
+    }
+    if(order.productionStatus === 'em_espera' && order.queuePosition){
+      L.push('Posição na fila de produção: ' + order.queuePosition + 'ª.');
+    }
+    if(order.productionStatus === 'cancelado'){
+      L.push('Qualquer dúvida, é só responder por aqui.');
+    }
+    return L.join('\n');
+  }
+  // Abre o WhatsApp do cliente com o aviso de status já escrito. Se o pedido não tiver
+  // telefone salvo, avisa a loja em vez de travar a ação administrativa.
+  function notifyCustomerStatus(order){
+    var wa = phoneToWhatsApp(order.customer && order.customer.phone);
+    if(!wa){ toast('Status atualizado, mas o pedido não tem telefone salvo pra avisar o cliente pelo WhatsApp.', ''); return; }
+    var url = 'https://wa.me/' + wa + '?text=' + encodeURIComponent(buildStatusUpdateMessage(order));
+    window.open(url, '_blank', 'noopener');
+  }
+
   function customerSnapshot(){
     return {
       name: (currentUser && currentUser.displayName) || (currentCustomer && currentCustomer.name) || '',
@@ -2421,7 +2594,8 @@
     var subtotal = state.cart.reduce(function(s,it){ return s + unitPrice(it)*it.qty; }, 0);
     var isEntrega = state.deliveryMethod === 'entrega';
     var shippingFee = isEntrega ? calcShippingFee(currentCustomer && currentCustomer.neighborhood, subtotal).fee : 0;
-    var discount = state.appliedCoupon ? subtotal * (Number(state.appliedCoupon.percent)||0) / 100 : 0;
+    var effCoupon = effectiveCoupon();
+    var discount = effCoupon ? subtotal * (Number(effCoupon.percent)||0) / 100 : 0;
     var giftFee = giftActive() ? getGiftConfig().price : 0;
     var payload = {
       uid: currentUser.uid,
@@ -2430,7 +2604,7 @@
       items: state.cart.map(function(it){ return {productId:it.productId, name:it.name, qty:it.qty, price:it.price, color:it.color||'', size:it.size, model:it.model, line:it.line, packaging:it.packaging||'', packagingPrice:Number(it.packagingPrice)||0}; }),
       subtotal: subtotal,
       discount: discount,
-      couponCode: state.appliedCoupon ? state.appliedCoupon.code : null,
+      couponCode: effCoupon ? effCoupon.code : null,
       deliveryMethod: state.deliveryMethod,
       shippingFee: shippingFee,
       paymentMethod: (MP_CREATE_URL && state.payMethod==='card') ? 'card' : 'pix',
@@ -2543,20 +2717,27 @@
 
   function tryAdminLogin(){
     var val = document.getElementById('adminPass').value;
-    if(val===ADMIN_PASS){
-      state.isAdmin = true;
-      applyAdminUI();
+    var errEl = document.getElementById('adminLoginError');
+    errEl.style.display = 'none';
+    if(!auth){ errEl.textContent = 'Sem conexão com o servidor agora. Tente de novo em instantes.'; errEl.style.display = 'block'; return; }
+    document.getElementById('adminLoginSubmit').disabled = true;
+    auth.signInWithEmailAndPassword(ADMIN_EMAIL, val).then(function(){
+      // state.isAdmin é ligado dentro do onAuthStateChanged, assim que o Firebase confirmar o login.
       document.getElementById('adminLoginOverlay').classList.add('hide');
       document.getElementById('adminPass').value='';
-      document.getElementById('adminLoginError').style.display='none';
       toast('Modo administrador ativado');
       setView('admin');
-    } else {
-      document.getElementById('adminLoginError').style.display='block';
-    }
+    }).catch(function(err){
+      console.error(err);
+      errEl.textContent = 'Senha incorreta ou sem conexão com o servidor.';
+      errEl.style.display = 'block';
+    }).finally(function(){
+      document.getElementById('adminLoginSubmit').disabled = false;
+    });
   }
 
   document.getElementById('btnAdminLogout').addEventListener('click', function(){
+    if(auth) auth.signOut();
     state.isAdmin = false;
     applyAdminUI();
     setView('home');
@@ -2824,6 +3005,7 @@
       var cancelBtn = (o.productionStatus==='aguardando_confirmacao' || o.productionStatus==='em_espera')
         ? '<button class="btn btn-outline" data-order-cancel="'+o.id+'" style="font-size:11.5px; padding:5px 10px; margin-top:8px;">Cancelar pedido</button>'
         : '';
+      var shareBtn = '<button class="btn btn-outline" data-order-share="'+o.id+'" style="font-size:11.5px; padding:5px 10px; margin-top:8px; margin-right:6px;">Copiar status</button>';
       return '<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;">'
         +'<div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-soft);"><span>'+orderNo+' · '+date+'</span><span style="font-weight:600;color:'+statusColor(o.productionStatus)+';">'+(PRODUCTION_LABELS[o.productionStatus]||o.productionStatus)+'</span></div>'
         +'<div style="font-size:13.5px;margin-top:6px;">'+itemsTxt+'</div>'
@@ -2832,6 +3014,7 @@
         +renderTimeline(o)
         +queueBlock
         +((MP_CREATE_URL && o.paymentMethod==='card' && o.paymentStatus==='pendente' && o.productionStatus==='aguardando_confirmacao') ? '<button class="btn btn-primary" data-order-pay="'+o.id+'" style="font-size:11.5px; padding:5px 10px; margin-top:8px; margin-right:6px;">Pagar com cartão</button>' : '')
+        +shareBtn
         +cancelBtn
         +feedbackBlock
       +'</div>';
@@ -2848,6 +3031,18 @@
     }
     var payBtn = e.target.closest('[data-order-pay]');
     if(payBtn){ startCardPayment(payBtn.dataset.orderPay); return; }
+    var shareBtn = e.target.closest('[data-order-share]');
+    if(shareBtn){
+      var orderId3 = shareBtn.dataset.orderShare;
+      var ord3 = myOrdersCache.find(function(x){return x.id===orderId3;});
+      if(!ord3){ return; }
+      var orderNo3 = ord3.orderNumber ? '#'+String(ord3.orderNumber).padStart(6,'0') : '';
+      var text = 'Status do meu pedido '+orderNo3+' no LesAteliê: '+(PRODUCTION_LABELS[ord3.productionStatus]||ord3.productionStatus)+'.\n'
+        +'Acompanhe por aqui (vai pedir os 4 últimos números do telefone do pedido): '+orderShareUrl(orderId3);
+      copyToClipboard(text).then(function(){ toast('Status copiado! Já pode colar e enviar.', 'success'); })
+        .catch(function(){ toast('Não foi possível copiar automaticamente. Texto: '+text, ''); });
+      return;
+    }
     var cancelBtn = e.target.closest('[data-order-cancel]');
     if(cancelBtn){
       var orderId2 = cancelBtn.dataset.orderCancel;
@@ -2879,6 +3074,7 @@
 
   /* ---------------- PEDIDOS (admin) ---------------- */
   var autoApproving = false;
+  var adminOrdersCache = [];
   function openAdminOrders(){
     document.getElementById('adminOrdersOverlay').classList.remove('hide');
     var body = document.getElementById('adminOrdersBody');
@@ -2902,6 +3098,7 @@
       var waitingCount = orders.filter(function(o){ return o.productionStatus==='em_espera'; }).length;
       document.getElementById('adminCapacityBar').innerHTML =
         '<span>Produção: '+inProd+'/'+CAPACIDADE_MAXIMA_PRODUCAO+'</span><span>Fila de espera: '+waitingCount+' pedido(s)</span>';
+      adminOrdersCache = orders;
       renderAdminOrders(orders);
     }).catch(function(){ body.innerHTML = '<p style="color:var(--badge);font-size:13px;">Não foi possível carregar os pedidos.</p>'; });
   }
@@ -2945,22 +3142,28 @@
       +'</div>';
     }).join('');
   }
+  // Busca o pedido já atualizado no banco e abre o WhatsApp do cliente com o aviso pronto.
+  function notifyFreshOrder(orderId){
+    db.collection('orders').doc(orderId).get().then(function(snap){
+      if(snap.exists) notifyCustomerStatus(normalizeOrder(Object.assign({id:orderId}, snap.data())));
+    }).catch(function(){ /* se falhar, só não abre o WhatsApp — o status já foi salvo normalmente */ });
+  }
   document.getElementById('adminOrdersBody').addEventListener('click', function(e){
     var approveBtn = e.target.closest('[data-approve-payment]');
     if(approveBtn){
-      approvePayment(approveBtn.dataset.approvePayment).then(function(){ toast('Pagamento confirmado.', 'success'); openAdminOrders(); })
+      approvePayment(approveBtn.dataset.approvePayment).then(function(){ toast('Pagamento confirmado.', 'success'); notifyFreshOrder(approveBtn.dataset.approvePayment); openAdminOrders(); })
         .catch(function(e){ console.error(e); toast('Não foi possível confirmar o pagamento.'+errDetail(e), 'error'); });
       return;
     }
     var rejectBtn = e.target.closest('[data-reject-payment]');
     if(rejectBtn){
-      rejectPayment(rejectBtn.dataset.rejectPayment).then(function(){ toast('Pagamento marcado como recusado.', 'success'); openAdminOrders(); })
+      rejectPayment(rejectBtn.dataset.rejectPayment).then(function(){ toast('Pagamento marcado como recusado.', 'success'); notifyFreshOrder(rejectBtn.dataset.rejectPayment); openAdminOrders(); })
         .catch(function(e){ console.error(e); toast('Não foi possível atualizar o pagamento.'+errDetail(e), 'error'); });
       return;
     }
     var advanceBtn = e.target.closest('[data-advance]');
     if(advanceBtn){
-      advanceProductionStage(advanceBtn.dataset.advance, advanceBtn.dataset.next).then(function(){ toast('Status atualizado.', 'success'); openAdminOrders(); })
+      advanceProductionStage(advanceBtn.dataset.advance, advanceBtn.dataset.next).then(function(){ toast('Status atualizado.', 'success'); notifyFreshOrder(advanceBtn.dataset.advance); openAdminOrders(); })
         .catch(function(e){ console.error(e); toast('Não foi possível atualizar o status.'+errDetail(e), 'error'); });
       return;
     }
@@ -2968,7 +3171,7 @@
     if(cancelBtn){
       var orderId = cancelBtn.dataset.orderCancelAdmin;
       confirmDialog('Cancelar este pedido? Essa ação não pode ser desfeita.', function(){
-        cancelOrder(orderId).then(function(){ toast('Pedido cancelado.', 'success'); openAdminOrders(); })
+        cancelOrder(orderId).then(function(){ toast('Pedido cancelado.', 'success'); notifyFreshOrder(orderId); openAdminOrders(); })
           .catch(function(e){ console.error(e); toast('Não foi possível cancelar o pedido.'+errDetail(e), 'error'); });
       });
     }
@@ -3022,6 +3225,7 @@
   }
 
   function openShippingAdmin(){
+    document.getElementById('adminShippingOverlay').classList.remove('hide');
     var cfg = getShippingConfig();
     document.getElementById('shipBaseInput').value = cfg.base || '';
     document.getElementById('shipFreeMinInput').value = cfg.freeMin || '';
@@ -3190,6 +3394,7 @@
     return getCoupons().find(function(c){ return String(c.code||'').trim().toUpperCase() === norm; }) || null;
   }
   function openCouponsAdmin(){
+    document.getElementById('adminCouponsOverlay').classList.remove('hide');
     var list = getCoupons();
     var body = document.getElementById('couponsBody');
     body.innerHTML = '';
@@ -3205,7 +3410,34 @@
         '<button type="button" class="admin-mini" style="background:var(--badge);" data-coupon-remove="'+idx+'">Remover</button>';
       body.appendChild(row);
     });
+    document.getElementById('firstPurchasePctInput').value = getFirstPurchaseDiscount() || '';
   }
+  function getFirstPurchaseDiscount(){
+    return Number(state.siteContent && state.siteContent.firstPurchaseDiscount) || 0;
+  }
+  // Cupom "de verdade" digitado pelo cliente tem prioridade; se não houver nenhum e o
+  // cliente estiver logado e nunca tiver fechado um pedido, aplica o desconto automático.
+  function effectiveCoupon(){
+    if(state.appliedCoupon) return state.appliedCoupon;
+    var pct = getFirstPurchaseDiscount();
+    if(pct > 0 && state.isFirstPurchase) return {code:'PRIMEIRA-COMPRA', percent: pct, auto:true};
+    return null;
+  }
+  // Verifica (uma vez por sessão de login) se o cliente logado já tem algum pedido.
+  // Assim que a resposta chega, re-renderiza o carrinho para já refletir o desconto.
+  function checkFirstPurchase(){
+    if(!db || !currentUser || state.firstPurchaseChecked) return;
+    state.firstPurchaseChecked = true;
+    db.collection('orders').where('uid','==',currentUser.uid).limit(1).get().then(function(snap){
+      state.isFirstPurchase = snap.empty;
+      if(!document.getElementById('cartOverlay').classList.contains('hide')) renderCart();
+    }).catch(function(){ /* silencioso: só deixa de aplicar o desconto automático */ });
+  }
+  document.getElementById('firstPurchaseSave').addEventListener('click', function(){
+    var pct = Math.max(0, Math.min(100, Number(document.getElementById('firstPurchasePctInput').value)||0));
+    saveSiteContentField('firstPurchaseDiscount', pct);
+    toast('Desconto de primeira compra salvo', 'success');
+  });
   document.getElementById('couponAdd').addEventListener('click', function(){
     var list = getCoupons();
     list.push({code:'', percent:10});
