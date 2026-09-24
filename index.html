@@ -1808,42 +1808,62 @@
   });
   var STORE_WHATSAPP = '5521967339946'; // same number as the Pix key, digits only with country code
 
+  // Mensagem enviada à produtora pelo WhatsApp. Usa a formatação do próprio WhatsApp:
+  // *negrito*, _itálico_ e emojis, em blocos curtos para ficar fácil de ler no celular.
   function buildOrderMessage(order){
     var c = order.customer || {};
-    var lines = ['DADOS DO CLIENTE', ''];
-    lines.push('Nome: '+(c.name||'-'));
-    lines.push('Telefone: '+(c.phone||'-'));
-    lines.push('E-mail: '+(c.email||'-'));
-    lines.push('');
-    lines.push('Endereço:');
-    lines.push('Rua: '+(c.street||'-'));
-    lines.push('Número: '+(c.number||'-'));
-    lines.push('Bairro: '+(c.neighborhood||'-'));
-    lines.push('Cidade: '+(c.city||'-'));
-    lines.push('Estado: '+(c.state||'-'));
-    lines.push('');
-    lines.push('DETALHES DO PEDIDO');
-    lines.push('');
-    lines.push('Pedido: #'+String(order.orderNumber).padStart(6,'0'));
-    lines.push('Data: '+new Date(order.createdAtMs).toLocaleString('pt-BR'));
-    lines.push('');
-    lines.push('Produtos:');
-    order.items.forEach(function(item){
-      var opts = [item.size, item.model, item.line, item.packaging].filter(Boolean).join(' · ');
-      lines.push('- '+item.name+(opts ? ' ('+opts+')' : '')+' × '+item.qty);
+    var LINE = '━━━━━━━━━━━━━━━━━━';
+    var d = new Date(order.createdAtMs || Date.now());
+    var dateTxt = d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    var numEmoji = function(n){ return n <= 9 ? (n + '\uFE0F\u20E3') : (n + '.'); };
+
+    // endereço em linhas naturais, ignorando o que estiver vazio
+    var street = [c.street, c.number ? 'nº ' + c.number : ''].filter(Boolean).join(', ');
+    var cityUf = [c.city, c.state ? String(c.state).toUpperCase() : ''].filter(Boolean).join(' — ');
+    var addressLines = [street, c.neighborhood, cityUf].filter(Boolean);
+
+    var L = [];
+    L.push('🧶 *NOVO PEDIDO — LesAteliê*');
+    L.push(LINE);
+    L.push('📋 *Pedido #' + String(order.orderNumber).padStart(6,'0') + '*');
+    L.push('🗓️ ' + dateTxt);
+    L.push('');
+    L.push('👤 *CLIENTE*');
+    L.push(c.name || '-');
+    L.push('📱 ' + (c.phone || '-'));
+    L.push('✉️ ' + (c.email || '-'));
+    L.push('');
+    L.push('📍 *ENTREGA*');
+    (addressLines.length ? addressLines : ['-']).forEach(function(t){ L.push(t); });
+    L.push('');
+    L.push('🛍️ *PRODUTOS*');
+    order.items.forEach(function(item, i){
+      var opts = [];
+      if(item.color)     opts.push('Cor: ' + item.color);
+      if(item.size)      opts.push('Tamanho: ' + item.size);
+      if(item.model)     opts.push('Modelo: ' + item.model);
+      if(item.line)      opts.push('Linha: ' + item.line);
+      if(item.packaging) opts.push('Embalagem: ' + item.packaging);
+      L.push(numEmoji(i+1) + ' *' + item.name + '* × ' + item.qty);
+      opts.forEach(function(o){ L.push('     ▫️ ' + o); });
+      L.push('     💵 ' + fmt(item.price) + (item.qty > 1 ? ' cada → *' + fmt(item.price * item.qty) + '*' : ''));
     });
-    lines.push('');
-    lines.push('Total: '+fmt(order.subtotal));
-    lines.push('');
-    lines.push('Pagamento: Pix — Chave: +55 21 96733-9946 (comprovante enviado por aqui)');
-    lines.push('Status da produção: '+PRODUCTION_LABELS[order.productionStatus]);
-    if(order.productionStatus==='em_espera'){
-      lines.push('Fila de produção: posição estimada '+order.queuePosition+'ª');
-      lines.push('A produção está com a capacidade máxima no momento. O prazo de início será atualizado conforme a fila avançar.');
+    L.push('');
+    L.push('💰 *TOTAL: ' + fmt(order.subtotal) + '*');
+    L.push('');
+    L.push('💳 *PAGAMENTO*');
+    L.push('Pix — chave +55 21 96733-9946');
+    L.push('_O comprovante será enviado nesta conversa._');
+    L.push('');
+    L.push('⏳ *STATUS*');
+    L.push(PRODUCTION_LABELS[order.productionStatus] || '-');
+    if(order.productionStatus === 'em_espera'){
+      L.push('Fila de produção: posição estimada ' + order.queuePosition + 'ª');
+      L.push('_A produção está no limite agora; o prazo de início será atualizado conforme a fila avançar._');
     }
-    lines.push('');
-    lines.push('Vou enviar o comprovante do Pix por aqui assim que fizer o pagamento. Obrigado(a)!');
-    return lines.join('\n');
+    L.push(LINE);
+    L.push('Obrigado(a)! 💛');
+    return L.join('\n');
   }
 
   function customerSnapshot(){
@@ -1865,7 +1885,7 @@
       uid: currentUser.uid,
       customerEmail: currentUser.email || '',
       customer: customerSnapshot(),
-      items: state.cart.map(function(it){ return {name:it.name, qty:it.qty, price:it.price, size:it.size, model:it.model, line:it.line, packaging:it.packaging}; }),
+      items: state.cart.map(function(it){ return {name:it.name, qty:it.qty, price:it.price, color:it.color||'', size:it.size, model:it.model, line:it.line, packaging:it.packaging}; }),
       subtotal: subtotal
     };
     createOrder(payload).then(function(created){
