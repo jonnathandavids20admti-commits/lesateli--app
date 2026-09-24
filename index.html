@@ -339,6 +339,18 @@
   /* ---------- admin ---------- */
   #adminToggle{ margin-top:auto; border-top:1px solid var(--line); border-radius:0 0 10px 10px; padding-top:16px; opacity:0.8; }
   #adminToggle:hover{opacity:1;}
+  /* ---------- Área do administrador (aba do site) ---------- */
+  .admin-page{max-width:920px; padding-top:28px; padding-bottom:70px;}
+  .admin-head{display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
+  .admin-title{font-family:var(--font-display); font-size:28px; margin:0; font-weight:600;}
+  .admin-sub{color:var(--ink-soft); font-size:12.5px; margin:4px 0 0;}
+  .admin-tabs{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid var(--line);}
+  .admin-tabs button{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:8px 16px; font-size:13.5px; font-weight:600; font-family:var(--font-body);}
+  .admin-tabs button.active{background:var(--rose-dark); color:#fff; border-color:var(--rose-dark);}
+  .admin-panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px; box-shadow:var(--shadow-sm);}
+  .admin-panel h3{font-family:var(--font-display); margin:0 0 6px;}
+  .admin-panel .ap-desc{color:var(--ink-soft); font-size:12.5px; margin:0 0 14px;}
+  @media (max-width:600px){ .admin-panel{padding:16px;} .admin-title{font-size:23px;} }
   .admin-bar{
     position:fixed; bottom:0; left:0; right:0; background:linear-gradient(135deg, #3D3547, #4A3F45); color:#fff; z-index:70;
     padding:12px 20px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
@@ -435,6 +447,7 @@
       <button data-view="home" class="active">Início</button>
       <button data-view="about">Sobre nós</button>
       <button data-view="products">Produtos</button>
+      <button data-view="admin" id="navAdminBtn" class="hide">Admin</button>
     </nav>
     <div class="header-right">
       <button class="cart-btn" id="cartBtn" aria-label="Carrinho">
@@ -516,6 +529,55 @@
       <div class="grid" id="productsGrid"></div>
     </div>
     <div class="footer-note">LesAteliê — feito à mão, com carinho.</div>
+  </div>
+
+  <!-- ADMIN (aba do site) -->
+  <div id="view-admin" class="hide">
+    <section class="wrap admin-page">
+      <div class="admin-head">
+        <div>
+          <h1 class="admin-title">Área do administrador</h1>
+          <p class="admin-sub" id="adminModeInfo">edições salvas neste dispositivo</p>
+        </div>
+        <button class="btn btn-outline" id="btnAdminLogout">Sair do modo administrador</button>
+      </div>
+      <div class="admin-tabs" id="adminTabs">
+        <button data-admin-tab="orders">Pedidos</button>
+        <button data-admin-tab="products">Produtos</button>
+        <button data-admin-tab="images">Imagens</button>
+        <button data-admin-tab="texts">Textos</button>
+      </div>
+
+      <!-- (os ids terminam em "Overlay" só por compatibilidade com o código antigo; agora são painéis da aba) -->
+      <div class="admin-panel hide" id="adminOrdersOverlay">
+        <h3>Pedidos dos clientes</h3>
+        <p class="ap-desc">Confirme o pagamento, cancele pedidos e atualize a produção.</p>
+        <div id="adminCapacityBar" style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; font-weight:600; background:var(--rose-pale); border-radius:10px; padding:10px 14px; margin-bottom:16px;"></div>
+        <div id="adminOrdersBody"></div>
+      </div>
+
+      <div class="admin-panel hide" id="prodListOverlay">
+        <h3>Gerenciar produtos</h3>
+        <p class="ap-desc">Edite ou exclua os produtos existentes.</p>
+        <div id="prodListBody"></div>
+        <button class="btn btn-ghost btn-full" id="openNewProduct" style="margin-top:14px;">+ Adicionar produto</button>
+      </div>
+
+      <div class="admin-panel hide" id="imgManagerOverlay">
+        <h3>Gerenciamento de Imagens</h3>
+        <p class="ap-desc">Substitua ou remova a foto de cada produto individualmente.</p>
+        <div id="imgManagerBody"></div>
+      </div>
+
+      <div class="admin-panel hide" id="adminTextsPanel">
+        <h3>Editar textos</h3>
+        <p class="ap-desc">No modo administrador, os textos em destaque das páginas ficam editáveis. Clique neles, escreva e saia do campo para salvar.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn btn-primary" id="btnEditTextsHome">Editar textos do Início</button>
+          <button class="btn btn-outline" id="btnEditTextsAbout">Editar textos de Sobre nós</button>
+        </div>
+      </div>
+    </section>
   </div>
 </main>
 
@@ -734,27 +796,6 @@
   </div>
 </div>
 
-<!-- ADMIN MANAGE PRODUCTS LIST -->
-<div class="overlay center hide" id="prodListOverlay">
-  <div class="modal-card" style="display:block; padding:26px; width:520px; max-height:86vh; overflow-y:auto;">
-    <button class="modal-close" id="prodListClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <h3 style="font-family:var(--font-display); margin:0 0 6px;">Gerenciar produtos</h3>
-    <p style="color:var(--ink-soft); font-size:12.5px; margin:0 0 14px;">Edite ou exclua os produtos existentes.</p>
-    <div id="prodListBody"></div>
-    <button class="btn btn-ghost btn-full" id="openNewProduct" style="margin-top:14px;">+ Adicionar produto</button>
-  </div>
-</div>
-
-<!-- GERENCIAMENTO DE IMAGENS -->
-<div class="overlay center hide" id="imgManagerOverlay">
-  <div class="modal-card" style="display:block; padding:26px; width:560px; max-height:86vh; overflow-y:auto;">
-    <button class="modal-close" id="imgManagerClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <h3 style="font-family:var(--font-display); margin:0 0 6px;">Gerenciamento de Imagens</h3>
-    <p style="color:var(--ink-soft); font-size:12.5px; margin:0 0 16px;">Substitua ou remova a foto de cada produto individualmente.</p>
-    <div id="imgManagerBody"></div>
-  </div>
-</div>
-
 <!-- CONFIRM DIALOG -->
 <div class="overlay center hide" id="confirmOverlay">
   <div class="modal-card admin-login" style="display:block; padding:26px;">
@@ -763,30 +804,6 @@
       <button class="btn btn-outline" id="confirmCancel" style="flex:1;">Cancelar</button>
       <button class="btn btn-primary" id="confirmOk" style="flex:1; background:var(--badge);">Excluir</button>
     </div>
-  </div>
-</div>
-
-<!-- admin bar -->
-
-<div class="admin-bar hide" id="adminBar">
-  <span class="admin-label">Modo administrador — <span id="adminModeInfo">edições salvas neste dispositivo</span></span>
-  <div class="abtns">
-    <button id="btnEditTexts">Editar textos</button>
-    <button id="btnManageProducts">Gerenciar produtos</button>
-    <button id="btnManageImages">Gerenciamento de Imagens</button>
-    <button id="btnAdminOrders">Pedidos</button>
-    <button id="btnAdminLogout">Sair</button>
-  </div>
-</div>
-
-<!-- ADMIN PEDIDOS -->
-<div class="overlay center hide" id="adminOrdersOverlay">
-  <div class="modal-card" style="display:block; padding:26px; width:560px; max-height:86vh; overflow-y:auto;">
-    <button class="modal-close" id="adminOrdersClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <h3 style="font-family:var(--font-display); margin:0 0 6px;">Pedidos dos clientes</h3>
-    <p style="color:var(--ink-soft); font-size:12.5px; margin:0 0 12px;">Confirme o pagamento e atualize a produção de cada pedido.</p>
-    <div id="adminCapacityBar" style="display:flex; gap:14px; font-size:12.5px; font-weight:600; background:var(--rose-pale); border-radius:10px; padding:10px 14px; margin-bottom:16px;"></div>
-    <div id="adminOrdersBody"></div>
   </div>
 </div>
 
@@ -1155,33 +1172,55 @@
     });
   }
 
+  // IMPORTANTE: o Firestore (web) NÃO permite fazer query dentro de uma transação — só ler
+  // documentos por referência. Por isso a fila de espera é consultada ANTES da transação
+  // (só para pegar as referências) e cada documento é relido dentro dela, com segurança.
+  function getWaitingRefs(excludeId){
+    return db.collection('orders').where('productionStatus','==','em_espera').get().then(function(snap){
+      var refs = [];
+      snap.forEach(function(d){ if(d.id !== excludeId) refs.push(d.ref); });
+      return refs;
+    });
+  }
+  function readDocs(tx, refs){
+    return Promise.all(refs.map(function(r){ return tx.get(r); })).then(function(snaps){
+      return snaps.filter(function(d){ return d.exists && d.data().productionStatus === 'em_espera'; });
+    });
+  }
+  function sortedWaiting(wSnaps){
+    var waiting = wSnaps.map(function(d){ return {ref:d.ref, data:d.data()}; });
+    waiting.sort(function(a,b){ return (a.data.queueEnteredAt||0)-(b.data.queueEnteredAt||0); });
+    return waiting;
+  }
+
   // Confirmação de pagamento (feita pela administração ao receber o Pix). Esta é a
   // "revalidação real" exigida pelo sistema: só agora, de forma atômica, decide se
   // existe vaga de produção ou se o pedido entra na fila de espera.
   function approvePayment(orderId){
     var orderRef = db.collection('orders').doc(orderId);
-    var waitingQuery = db.collection('orders').where('productionStatus','==','em_espera');
-    return db.runTransaction(function(tx){
-      return Promise.all([tx.get(orderRef), tx.get(metaRef()), tx.get(waitingQuery)]).then(function(res){
-        var oSnap=res[0], mSnap=res[1], wSnap=res[2];
-        if(!oSnap.exists) throw new Error('Pedido não encontrado.');
-        var o = oSnap.data();
-        if(o.paymentStatus === 'aprovado') return; // já processado, evita duplicar
-        var inProd = (mSnap.exists && mSnap.data().inProduction) || 0;
-        var patch = {paymentStatus:'aprovado'};
-        if(inProd < CAPACIDADE_MAXIMA_PRODUCAO){
-          patch.productionStatus = 'em_producao';
-          patch.timeline = firebase.firestore.FieldValue.arrayUnion({stage:'em_producao', atMs: Date.now()});
-          tx.set(metaRef(), {inProduction: inProd+1}, {merge:true});
-        } else {
-          var position = wSnap.size + 1;
-          patch.productionStatus = 'em_espera';
-          patch.queueEnteredAt = Date.now();
-          patch.queuePosition = position;
-          patch.timeline = firebase.firestore.FieldValue.arrayUnion({stage:'em_espera', atMs: Date.now()});
-          tx.set(metaRef(), {waitingCount: position}, {merge:true});
-        }
-        tx.update(orderRef, patch);
+    return getWaitingRefs(orderId).then(function(waitRefs){
+      return db.runTransaction(function(tx){
+        return Promise.all([tx.get(orderRef), tx.get(metaRef()), readDocs(tx, waitRefs)]).then(function(res){
+          var oSnap=res[0], mSnap=res[1], wSnaps=res[2];
+          if(!oSnap.exists) throw new Error('Pedido não encontrado.');
+          var o = oSnap.data();
+          if(o.paymentStatus === 'aprovado') return; // já processado, evita duplicar
+          var inProd = (mSnap.exists && mSnap.data().inProduction) || 0;
+          var patch = {paymentStatus:'aprovado'};
+          if(inProd < CAPACIDADE_MAXIMA_PRODUCAO){
+            patch.productionStatus = 'em_producao';
+            patch.timeline = firebase.firestore.FieldValue.arrayUnion({stage:'em_producao', atMs: Date.now()});
+            tx.set(metaRef(), {inProduction: inProd+1}, {merge:true});
+          } else {
+            var position = wSnaps.length + 1;
+            patch.productionStatus = 'em_espera';
+            patch.queueEnteredAt = Date.now();
+            patch.queuePosition = position;
+            patch.timeline = firebase.firestore.FieldValue.arrayUnion({stage:'em_espera', atMs: Date.now()});
+            tx.set(metaRef(), {waitingCount: position}, {merge:true});
+          }
+          tx.update(orderRef, patch);
+        });
       });
     });
   }
@@ -1195,37 +1234,32 @@
 
   // Libera a vaga de um pedido que sai de "em produção" (concluído/cancelado) e promove
   // automaticamente o primeiro pedido elegível da fila, recalculando as posições restantes.
-  function releaseProductionSlot(tx, wasInProduction){
-    if(!wasInProduction) return Promise.resolve();
-    var waitingQuery = db.collection('orders').where('productionStatus','==','em_espera');
-    return Promise.all([tx.get(metaRef()), tx.get(waitingQuery)]).then(function(res){
-      var mSnap=res[0], wSnap=res[1];
-      var inProd = Math.max(0, ((mSnap.exists && mSnap.data().inProduction) || 0) - 1);
-      var waiting = [];
-      wSnap.forEach(function(d){ waiting.push({ref:d.ref, data:d.data()}); });
-      waiting.sort(function(a,b){ return (a.data.queueEnteredAt||0)-(b.data.queueEnteredAt||0); });
-      if(waiting.length){
-        var promoted = waiting.shift();
-        tx.update(promoted.ref, {
-          productionStatus:'em_producao',
-          queuePosition: firebase.firestore.FieldValue.delete(),
-          timeline: firebase.firestore.FieldValue.arrayUnion({stage:'em_producao', atMs: Date.now()})
-        });
-        inProd += 1;
-        waiting.forEach(function(w, idx){ tx.update(w.ref, {queuePosition: idx+1}); });
-      }
-      tx.set(metaRef(), {inProduction: inProd, waitingCount: waiting.length}, {merge:true});
-    });
+  // (Só ESCREVE — todas as leituras já foram feitas antes, como o Firestore exige.)
+  function applyRelease(tx, mSnap, wSnaps){
+    var inProd = Math.max(0, ((mSnap.exists && mSnap.data().inProduction) || 0) - 1);
+    var waiting = sortedWaiting(wSnaps);
+    if(waiting.length){
+      var promoted = waiting.shift();
+      tx.update(promoted.ref, {
+        productionStatus:'em_producao',
+        queuePosition: firebase.firestore.FieldValue.delete(),
+        timeline: firebase.firestore.FieldValue.arrayUnion({stage:'em_producao', atMs: Date.now()})
+      });
+      inProd += 1;
+      waiting.forEach(function(w, idx){ tx.update(w.ref, {queuePosition: idx+1}); });
+    }
+    tx.set(metaRef(), {inProduction: inProd, waitingCount: waiting.length}, {merge:true});
   }
 
   function advanceProductionStage(orderId, nextStage){
     var orderRef = db.collection('orders').doc(orderId);
-    return db.runTransaction(function(tx){
-      return tx.get(orderRef).then(function(oSnap){
-        if(!oSnap.exists) throw new Error('Pedido não encontrado.');
-        var o = oSnap.data();
-        var wasInProduction = o.productionStatus === 'em_producao';
-        return releaseProductionSlot(tx, wasInProduction).then(function(){
+    return getWaitingRefs(orderId).then(function(waitRefs){
+      return db.runTransaction(function(tx){
+        return Promise.all([tx.get(orderRef), tx.get(metaRef()), readDocs(tx, waitRefs)]).then(function(res){
+          var oSnap=res[0], mSnap=res[1], wSnaps=res[2];
+          if(!oSnap.exists) throw new Error('Pedido não encontrado.');
+          var o = oSnap.data();
+          if(o.productionStatus === 'em_producao') applyRelease(tx, mSnap, wSnaps);
           var patch = {productionStatus: nextStage, timeline: firebase.firestore.FieldValue.arrayUnion({stage:nextStage, atMs: Date.now()})};
           if(nextStage==='entregue') patch.completedAtMs = Date.now();
           tx.update(orderRef, patch);
@@ -1237,35 +1271,38 @@
   // Cancelamento — usado tanto pelo cliente (só antes de entrar em produção) quanto pela administração.
   function cancelOrder(orderId){
     var orderRef = db.collection('orders').doc(orderId);
-    return db.runTransaction(function(tx){
-      return tx.get(orderRef).then(function(oSnap){
-        if(!oSnap.exists) throw new Error('Pedido não encontrado.');
-        var o = oSnap.data();
-        if(o.productionStatus === 'cancelado' || o.productionStatus === 'entregue') return;
-        var wasInProduction = o.productionStatus === 'em_producao';
-        var wasWaiting = o.productionStatus === 'em_espera';
-        var chain = wasInProduction ? releaseProductionSlot(tx, true) : Promise.resolve();
-        return chain.then(function(){
-          if(wasWaiting){
-            var waitingQuery = db.collection('orders').where('productionStatus','==','em_espera');
-            return tx.get(waitingQuery).then(function(wSnap){
-              var waiting = [];
-              wSnap.forEach(function(d){ if(d.id!==orderId) waiting.push({ref:d.ref, data:d.data()}); });
-              waiting.sort(function(a,b){ return (a.data.queueEnteredAt||0)-(b.data.queueEnteredAt||0); });
-              waiting.forEach(function(w, idx){ tx.update(w.ref, {queuePosition: idx+1}); });
-              tx.set(metaRef(), {waitingCount: waiting.length}, {merge:true});
-            });
+    return getWaitingRefs(orderId).then(function(waitRefs){
+      return db.runTransaction(function(tx){
+        return Promise.all([tx.get(orderRef), tx.get(metaRef()), readDocs(tx, waitRefs)]).then(function(res){
+          var oSnap=res[0], mSnap=res[1], wSnaps=res[2];
+          if(!oSnap.exists) throw new Error('Pedido não encontrado.');
+          var o = oSnap.data();
+          if(o.productionStatus === 'cancelado' || o.productionStatus === 'entregue') return;
+          if(o.productionStatus === 'em_producao'){
+            applyRelease(tx, mSnap, wSnaps);
+          } else if(o.productionStatus === 'em_espera'){
+            var waiting = sortedWaiting(wSnaps);
+            waiting.forEach(function(w, idx){ tx.update(w.ref, {queuePosition: idx+1}); });
+            tx.set(metaRef(), {waitingCount: waiting.length}, {merge:true});
           }
-        }).then(function(){
-          tx.update(orderRef, {
+          var cancelPatch = {
             productionStatus:'cancelado',
             timeline: firebase.firestore.FieldValue.arrayUnion({stage:'cancelado', atMs: Date.now()})
-          });
+          };
+          if(o.productionStatus === 'em_espera') cancelPatch.queuePosition = firebase.firestore.FieldValue.delete();
+          tx.update(orderRef, cancelPatch);
         });
       });
     });
   }
 
+  // Texto curto com o motivo real do erro (ajuda a descobrir se é regra do Firebase, internet, etc.)
+  function errDetail(e){
+    if(e && e.code === 'permission-denied') return ' O Firebase bloqueou (permission-denied): ajuste as regras do Firestore.';
+    if(e && e.code) return ' ('+e.code+')';
+    if(e && e.message) return ' ('+e.message+')';
+    return '';
+  }
 
   function initFirebase(){
     try{
@@ -1279,6 +1316,7 @@
         appId: "1:83786884406:web:2a5b322fae62ef286e3f97"
       });
       auth = firebase.auth();
+      try{ auth.languageCode = 'pt-BR'; }catch(e){}
       db = firebase.firestore();
       state.dbAvailable = true;
       applyAdminUI();
@@ -1375,13 +1413,25 @@
     var map = {
       'auth/email-already-in-use':'Este e-mail já está cadastrado. Tente entrar.',
       'auth/invalid-email':'E-mail inválido.',
+      'auth/missing-password':'Digite a senha.',
       'auth/weak-password':'A senha precisa ter pelo menos 6 caracteres.',
       'auth/wrong-password':'Senha incorreta.',
       'auth/user-not-found':'Conta não encontrada. Crie uma conta primeiro.',
       'auth/invalid-credential':'E-mail ou senha incorretos.',
-      'auth/popup-closed-by-user':'Login cancelado.'
+      'auth/too-many-requests':'Muitas tentativas. Aguarde alguns minutos e tente de novo.',
+      'auth/network-request-failed':'Sem conexão com a internet. Verifique e tente de novo.',
+      'auth/popup-closed-by-user':'Login cancelado.',
+      'auth/cancelled-popup-request':'Login cancelado.',
+      'auth/popup-blocked':'O navegador bloqueou a janela do Google. Permita pop-ups e tente de novo.',
+      'auth/operation-not-supported-in-this-environment':'Este navegador não permite login com Google aqui. Tente abrir o site no Chrome.',
+      'auth/operation-not-allowed':'Este tipo de login ainda não está ativado no Firebase (Authentication → Sign-in method).',
+      'auth/unauthorized-domain':'Este site ainda não está autorizado no Firebase (Authentication → Settings → Authorized domains).',
+      'auth/api-key-not-valid.-please-pass-a-valid-api-key.':'A chave do Firebase é inválida.',
+      'auth/invalid-api-key':'A chave do Firebase é inválida.'
     };
-    return (err && map[err.code]) || 'Não foi possível concluir. Tente novamente.';
+    var code = err && err.code;
+    if(code && map[code]) return map[code];
+    return 'Não foi possível concluir.' + (code ? ' Código: '+code : (err && err.message ? ' ('+err.message+')' : '')) ;
   }
   function applyAccountUI(){
     var loggedIn = !!currentUser;
@@ -1504,13 +1554,15 @@
 
   /* ---------------- RENDER: nav / views ---------------- */
   function setView(v){
-    ['home','about','products'].forEach(function(name){
+    if(v==='admin' && !state.isAdmin){ v='home'; }
+    ['home','about','products','admin'].forEach(function(name){
       document.getElementById('view-'+name).classList.toggle('hide', name!==v);
     });
     document.querySelectorAll('nav.main button').forEach(function(b){
       b.classList.toggle('active', b.dataset.view===v);
     });
     window.scrollTo({top:0, behavior:'smooth'});
+    if(v==='admin'){ showAdminTab(currentAdminTab || 'orders'); }
   }
 
   function renderHeroArt(){
@@ -1890,7 +1942,8 @@
   /* ---------------- ADMIN ---------------- */
   function applyAdminUI(){
     document.body.classList.toggle('admin-on', state.isAdmin);
-    document.getElementById('adminBar').classList.toggle('hide', !state.isAdmin);
+    document.getElementById('navAdminBtn').classList.toggle('hide', !state.isAdmin);
+    if(!state.isAdmin && !document.getElementById('view-admin').classList.contains('hide')){ setView('home'); }
     document.querySelectorAll('.admin-editable').forEach(function(el){
       el.setAttribute('contenteditable', state.isAdmin ? 'true' : 'false');
     });
@@ -1900,7 +1953,7 @@
   }
 
   document.getElementById('adminToggle').addEventListener('click', function(){
-    if(state.isAdmin){ document.getElementById('adminBar').classList.toggle('hide'); return; }
+    if(state.isAdmin){ setView('admin'); return; }
     document.getElementById('adminLoginOverlay').classList.remove('hide');
     document.getElementById('adminPass').focus();
   });
@@ -1919,6 +1972,7 @@
       document.getElementById('adminPass').value='';
       document.getElementById('adminLoginError').style.display='none';
       toast('Modo administrador ativado');
+      setView('admin');
     } else {
       document.getElementById('adminLoginError').style.display='block';
     }
@@ -1927,12 +1981,31 @@
   document.getElementById('btnAdminLogout').addEventListener('click', function(){
     state.isAdmin = false;
     applyAdminUI();
-    document.getElementById('adminBar').classList.add('hide');
+    setView('home');
   });
 
-  document.getElementById('btnEditTexts').addEventListener('click', function(){
-    toast('Clique diretamente nos textos em destaque para editá-los.');
-    setView('home');
+  var currentAdminTab = 'orders';
+  function showAdminTab(name){
+    currentAdminTab = name;
+    document.querySelectorAll('#adminTabs button').forEach(function(b){
+      b.classList.toggle('active', b.dataset.adminTab===name);
+    });
+    ['adminOrdersOverlay','prodListOverlay','imgManagerOverlay','adminTextsPanel'].forEach(function(id){
+      document.getElementById(id).classList.add('hide');
+    });
+    if(name==='orders') openAdminOrders();
+    else if(name==='products') openProdList();
+    else if(name==='images') openImgManager();
+    else document.getElementById('adminTextsPanel').classList.remove('hide');
+  }
+  document.querySelectorAll('#adminTabs button').forEach(function(b){
+    b.addEventListener('click', function(){ showAdminTab(b.dataset.adminTab); });
+  });
+  document.getElementById('btnEditTextsHome').addEventListener('click', function(){
+    setView('home'); toast('Clique diretamente nos textos em destaque para editá-los.');
+  });
+  document.getElementById('btnEditTextsAbout').addEventListener('click', function(){
+    setView('about'); toast('Clique diretamente nos textos em destaque para editá-los.');
   });
 
   // persist edited texts: local cache immediately + sync to Firestore for all visitors
@@ -1958,8 +2031,6 @@
   }
 
   /* ---- product management ---- */
-  document.getElementById('btnManageProducts').addEventListener('click', openProdList);
-  document.getElementById('prodListClose').addEventListener('click', function(){ document.getElementById('prodListOverlay').classList.add('hide'); });
   document.getElementById('prodFormClose').addEventListener('click', function(){ document.getElementById('prodFormOverlay').classList.add('hide'); });
 
   /* ---------------- CONFIRM DIALOG (generic) ---------------- */
@@ -2020,6 +2091,7 @@
       document.getElementById('accEmail').value=''; document.getElementById('accPass').value=''; document.getElementById('accName').value='';
       toast(accMode==='register' ? 'Conta criada com sucesso!' : 'Login realizado!', 'success');
     }).catch(function(err){
+      console.error('Erro de login/cadastro:', err);
       errEl.textContent = translateAuthError(err);
       errEl.style.display='block';
     });
@@ -2028,10 +2100,13 @@
   document.getElementById('accGoogleBtn').addEventListener('click', function(){
     if(!auth){ toast('Conexão com o servidor indisponível no momento.', 'error'); return; }
     var provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({prompt:'select_account'});
+    document.getElementById('accError').style.display='none';
     auth.signInWithPopup(provider).then(function(){
       document.getElementById('accountOverlay').classList.add('hide');
       toast('Login com Google realizado!', 'success');
     }).catch(function(err){
+      console.error('Erro no login com Google:', err);
       var errEl = document.getElementById('accError');
       errEl.textContent = translateAuthError(err);
       errEl.style.display='block';
@@ -2193,7 +2268,7 @@
       var orderId2 = cancelBtn.dataset.orderCancel;
       confirmDialog('Cancelar este pedido? Essa ação não pode ser desfeita.', function(){
         cancelOrder(orderId2).then(function(){ toast('Pedido cancelado.', 'success'); openMyOrders(); })
-          .catch(function(){ toast('Não foi possível cancelar o pedido agora.', 'error'); });
+          .catch(function(e){ console.error(e); toast('Não foi possível cancelar o pedido agora.'+errDetail(e), 'error'); });
       });
       return;
     }
@@ -2213,8 +2288,6 @@
   });
 
   /* ---------------- PEDIDOS (admin) ---------------- */
-  document.getElementById('btnAdminOrders').addEventListener('click', openAdminOrders);
-  document.getElementById('adminOrdersClose').addEventListener('click', function(){ document.getElementById('adminOrdersOverlay').classList.add('hide'); });
   function openAdminOrders(){
     document.getElementById('adminOrdersOverlay').classList.remove('hide');
     var body = document.getElementById('adminOrdersBody');
@@ -2234,7 +2307,7 @@
   }
   function adminActionButtons(o){
     var btns = [];
-    if(o.paymentStatus==='pendente'){
+    if(o.paymentStatus==='pendente' && o.productionStatus!=='cancelado'){
       btns.push('<button class="btn btn-primary" data-approve-payment="'+o.id+'" style="font-size:11.5px;padding:6px 10px;">Confirmar pagamento</button>');
       btns.push('<button class="btn btn-outline" data-reject-payment="'+o.id+'" style="font-size:11.5px;padding:6px 10px;">Recusar pagamento</button>');
     }
@@ -2273,19 +2346,19 @@
     var approveBtn = e.target.closest('[data-approve-payment]');
     if(approveBtn){
       approvePayment(approveBtn.dataset.approvePayment).then(function(){ toast('Pagamento confirmado.', 'success'); openAdminOrders(); })
-        .catch(function(){ toast('Não foi possível confirmar o pagamento.', 'error'); });
+        .catch(function(e){ console.error(e); toast('Não foi possível confirmar o pagamento.'+errDetail(e), 'error'); });
       return;
     }
     var rejectBtn = e.target.closest('[data-reject-payment]');
     if(rejectBtn){
       rejectPayment(rejectBtn.dataset.rejectPayment).then(function(){ toast('Pagamento marcado como recusado.', 'success'); openAdminOrders(); })
-        .catch(function(){ toast('Não foi possível atualizar o pagamento.', 'error'); });
+        .catch(function(e){ console.error(e); toast('Não foi possível atualizar o pagamento.'+errDetail(e), 'error'); });
       return;
     }
     var advanceBtn = e.target.closest('[data-advance]');
     if(advanceBtn){
       advanceProductionStage(advanceBtn.dataset.advance, advanceBtn.dataset.next).then(function(){ toast('Status atualizado.', 'success'); openAdminOrders(); })
-        .catch(function(){ toast('Não foi possível atualizar o status.', 'error'); });
+        .catch(function(e){ console.error(e); toast('Não foi possível atualizar o status.'+errDetail(e), 'error'); });
       return;
     }
     var cancelBtn = e.target.closest('[data-order-cancel-admin]');
@@ -2293,7 +2366,7 @@
       var orderId = cancelBtn.dataset.orderCancelAdmin;
       confirmDialog('Cancelar este pedido? Essa ação não pode ser desfeita.', function(){
         cancelOrder(orderId).then(function(){ toast('Pedido cancelado.', 'success'); openAdminOrders(); })
-          .catch(function(){ toast('Não foi possível cancelar o pedido.', 'error'); });
+          .catch(function(e){ console.error(e); toast('Não foi possível cancelar o pedido.'+errDetail(e), 'error'); });
       });
     }
   });
@@ -2423,7 +2496,6 @@
 
     document.getElementById('imgManagerOverlay').classList.remove('hide');
   }
-  document.getElementById('btnManageImages').addEventListener('click', openImgManager);
   // Delegated: clicking any "Substituir" button opens the file dialog of its paired hidden input.
   // A real .click() call inside a genuine click handler is far more reliable across embedded
   // browsers/webviews than relying on implicit <label> association.
@@ -2433,7 +2505,6 @@
     var input = document.getElementById(btn.dataset.target);
     if(input) input.click();
   });
-  document.getElementById('imgManagerClose').addEventListener('click', function(){ document.getElementById('imgManagerOverlay').classList.add('hide'); });
 
   function openProdList(){
     var body = document.getElementById('prodListBody');
@@ -2509,7 +2580,6 @@
       document.getElementById('pfAvailable').value = '1';
       previewWrap.innerHTML = '';
     }
-    document.getElementById('prodListOverlay').classList.add('hide');
     document.getElementById('prodFormOverlay').classList.remove('hide');
   }
 
@@ -2581,6 +2651,7 @@
     }
     renderAll();
     document.getElementById('prodFormOverlay').classList.add('hide');
+    if(!document.getElementById('prodListOverlay').classList.contains('hide')) openProdList();
     toast('Produto salvo com sucesso', 'success');
     syncProductToFirestore(obj);
   });
