@@ -445,9 +445,12 @@
   .delivery-note{font-size:11.5px; color:var(--ink-soft); margin:0 0 10px; line-height:1.5;}
 
   /* ---------- admin: frete por bairro ---------- */
-  .ship-rate-row{display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line);}
-  .ship-rate-row input{flex:1; box-sizing:border-box; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font-family:inherit; font-size:13px;}
+  .ship-rate-row{display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; overflow-x:auto;}
+  .ship-rate-row input{flex:1 1 90px; min-width:70px; box-sizing:border-box; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); font-family:inherit; font-size:13px;}
   .ship-rate-row input.ship-fee-input{flex:0 0 90px;}
+  .ship-rate-row input.ship-uf-input{flex:0 0 54px; text-transform:uppercase;}
+  .ship-rate-row .ship-active-check{display:flex; align-items:center; gap:4px; font-size:11px; color:var(--ink-soft); flex:0 0 auto; white-space:nowrap;}
+  @media (max-width:600px){ .ship-rate-row{ padding:10px 0; } }
 
   /* galeria */
   .pd-image{flex-direction:column; gap:12px;}
@@ -673,20 +676,87 @@
       </div>
 
       <div class="admin-panel hide" id="adminShippingOverlay">
-        <h3>Configurar frete</h3>
-        <p class="ap-desc">Defina o valor base da entrega e, se quiser, valores específicos por bairro (por exemplo, com base na distância até a loja).</p>
-        <div class="form-field" style="max-width:240px;">
-          <label>Valor base do frete (bairros não listados abaixo)</label>
-          <input id="shipBaseInput" type="number" step="0.01" min="0" placeholder="0,00">
+        <h3>Configurações de entrega e frete</h3>
+        <p class="ap-desc">Regra principal por distância (a partir do endereço da loja), com exceções por CEP/bairro e frete grátis. Tudo fica salvo no servidor (Firestore) e vale para todos os visitantes.</p>
+
+        <div class="opt-label" style="margin:0 0 8px;">Método principal de cálculo</div>
+        <div class="delivery-opts" id="shipMethodTabs" style="margin-bottom:18px; max-width:520px;">
+          <button type="button" class="delivery-opt" data-method="distance">Por distância</button>
+          <button type="button" class="delivery-opt" data-method="city">Por município</button>
+          <button type="button" class="delivery-opt" data-method="neighborhood">Por bairro</button>
         </div>
+
+        <div class="opt-label" style="margin:0 0 6px;">Endereço de origem da loja</div>
+        <div class="form-grid" style="max-width:560px;">
+          <div class="form-field"><label>CEP</label><input id="shipOriginCep" placeholder="00000-000" maxlength="9" inputmode="numeric"></div>
+          <div class="form-field"><label>Número</label><input id="shipOriginNumber" placeholder="123"></div>
+        </div>
+        <p id="shipOriginCepStatus" style="font-size:11.5px; color:var(--ink-soft); margin:2px 0 10px;"></p>
+        <div class="form-grid" style="max-width:560px;">
+          <div class="form-field"><label>Rua</label><input id="shipOriginStreet" placeholder="Rua da loja"></div>
+          <div class="form-field"><label>Bairro</label><input id="shipOriginNeighborhood" placeholder="Bairro"></div>
+          <div class="form-field"><label>Cidade</label><input id="shipOriginCity" placeholder="Cidade"></div>
+          <div class="form-field"><label>Estado</label><input id="shipOriginState" placeholder="UF" maxlength="2" style="text-transform:uppercase;"></div>
+        </div>
+        <p id="shipOriginGeoStatus" style="font-size:11.5px; color:var(--ink-soft); margin:2px 0 4px;"></p>
+        <button class="btn btn-outline" id="shipOriginSave" style="margin:8px 0 22px;">Salvar endereço de origem</button>
+
+        <div id="shipDistanceBlock">
+          <div class="opt-label" style="margin:0 0 6px;">Entrega por distância</div>
+          <div class="form-grid" style="max-width:420px;">
+            <div class="form-field"><label>Distância máxima de entrega (km)</label><input id="shipMaxKm" type="number" step="0.1" min="0" placeholder="15"></div>
+          </div>
+          <div class="opt-label" style="margin:14px 0 6px; font-weight:600;">Faixas de distância</div>
+          <p class="ap-desc" style="margin:0 0 8px;">Ex.: 0 a 3 km = R$ 5,00. As faixas não podem se sobrepor.</p>
+          <div id="shipTiersBody"></div>
+          <button class="btn btn-ghost btn-full" id="shipAddTier" style="margin-top:10px;">+ Adicionar faixa de distância</button>
+          <div id="shipTiersError" style="color:var(--badge); font-size:12.5px; margin-top:8px;"></div>
+
+          <div class="opt-label" style="margin:20px 0 6px; font-weight:600;">Teto de frete (opcional)</div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:8px;">
+            <input type="checkbox" id="shipCapEnabled"> Limitar o valor máximo do frete
+          </label>
+          <div id="shipCapFields" class="hide" style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; margin-bottom:10px;">
+            <div class="form-field" style="max-width:160px;"><label>Valor máximo (R$)</label><input id="shipCapMax" type="number" step="0.01" min="0" placeholder="20,00"></div>
+            <div class="form-field" style="max-width:260px;">
+              <label>Se o frete calculado passar do teto</label>
+              <select id="shipCapBehavior" style="width:100%; padding:9px 12px; border:1px solid var(--line); border-radius:10px; font-size:13px;">
+                <option value="limit">Cobrar só o valor máximo</option>
+                <option value="unavailable">Marcar como indisponível</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-outline" id="shipDistanceSave" style="margin:6px 0 22px;">Salvar configuração por distância</button>
+        </div>
+
+        <div id="shipCityBlock" class="hide">
+          <div class="opt-label" style="margin:0 0 6px;">Entrega por município</div>
+          <div id="shipCityBody"></div>
+          <button class="btn btn-ghost btn-full" id="shipAddCity" style="margin-top:10px; margin-bottom:22px;">+ Adicionar município</button>
+        </div>
+
+        <div class="opt-label" style="margin:0 0 6px;">Frete grátis</div>
         <div class="form-field" style="max-width:280px;">
-          <label>Frete grátis a partir de (R$) — deixe em branco ou 0 para desativar</label>
+          <label>A partir de (R$) — deixe em branco ou 0 para desativar</label>
           <input id="shipFreeMinInput" type="number" step="0.01" min="0" placeholder="0,00">
         </div>
-        <button class="btn btn-outline" id="shipBaseSave" style="margin-bottom:20px;">Salvar valor base</button>
-        <div class="opt-label" style="margin:0 0 6px;">Valores por bairro</div>
+        <p class="ap-desc" style="margin:0 0 8px;">Considera apenas o valor dos produtos, sem somar o frete.</p>
+        <button class="btn btn-outline" id="shipBaseSave" style="margin-bottom:22px;">Salvar frete grátis</button>
+
+        <div class="opt-label" style="margin:0 0 6px;">Exceções por bairro <span style="font-weight:400; color:var(--ink-soft);">(têm prioridade sobre a regra principal)</span></div>
         <div id="shipRatesBody"></div>
-        <button class="btn btn-ghost btn-full" id="shipAddRate" style="margin-top:12px;">+ Adicionar bairro</button>
+        <button class="btn btn-ghost btn-full" id="shipAddRate" style="margin-top:10px; margin-bottom:22px;">+ Adicionar exceção de bairro</button>
+
+        <div class="opt-label" style="margin:0 0 6px;">Exceções por CEP <span style="font-weight:400; color:var(--ink-soft);">(prioridade máxima)</span></div>
+        <div id="shipCepExcBody"></div>
+        <button class="btn btn-ghost btn-full" id="shipAddCepExc" style="margin-top:10px; margin-bottom:26px;">+ Adicionar exceção de CEP</button>
+
+        <div class="opt-label" style="margin:0 0 6px;">Testar cálculo de frete</div>
+        <div style="display:flex; gap:8px; max-width:360px; margin-bottom:10px;">
+          <input type="text" id="shipSimCep" placeholder="CEP do cliente" style="flex:1; padding:9px 12px; border:1px solid var(--line); border-radius:10px; font-size:13px;">
+          <button class="btn btn-outline" id="shipSimBtn" style="white-space:nowrap;">Simular</button>
+        </div>
+        <div id="shipSimResult" style="font-size:13px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; display:none;"></div>
       </div>
 
       <div class="admin-panel hide" id="adminSalesPanel">
@@ -796,6 +866,13 @@
         <button type="button" class="delivery-opt" id="deliveryOptRetirada" data-delivery="retirada">🏠 Retirada</button>
       </div>
       <p class="delivery-note" id="deliveryNote"></p>
+      <div id="cartCepCalcBox" style="margin:2px 0 12px;">
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="cartSimCep" placeholder="Calcular frete: digite seu CEP" maxlength="9" inputmode="numeric" style="flex:1; padding:9px 12px; border:1px solid var(--line); border-radius:10px; font-size:12.5px;">
+          <button class="btn btn-outline" id="cartSimBtn" style="white-space:nowrap; font-size:12.5px; padding:9px 14px;">Calcular</button>
+        </div>
+        <p id="cartSimResult" style="font-size:12px; color:var(--ink-soft); margin:6px 0 0;"></p>
+      </div>
       <div class="gift-box" id="giftBox">
         <label class="gift-toggle"><input type="checkbox" id="giftCheck"> <span>🎁 Adicionar cartão com mensagem <em id="giftPriceTxt"></em></span></label>
         <div id="giftFields" class="hide">
@@ -903,6 +980,11 @@
         </div>
       </div>
       <div class="form-field"><label>Telefone</label><input id="accPhone" placeholder="(21) 90000-0000"></div>
+      <div class="form-grid">
+        <div class="form-field"><label>CEP</label><input id="accCep" placeholder="00000-000" maxlength="9" inputmode="numeric"></div>
+        <div class="form-field"><label>Complemento</label><input id="accComplement" placeholder="Apto, bloco... (opcional)"></div>
+      </div>
+      <p id="accCepStatus" style="font-size:11.5px; color:var(--ink-soft); margin:2px 0 10px; min-height:14px;"></p>
       <div class="form-grid">
         <div class="form-field"><label>Rua</label><input id="accStreet" placeholder="Nome da rua"></div>
         <div class="form-field"><label>Número</label><input id="accNumber" placeholder="123"></div>
@@ -1314,6 +1396,8 @@
     appliedCoupon: null,
     isAdmin: false,
     deliveryMethod: 'entrega', // 'entrega' ou 'retirada'
+    lastShippingFee: 0,
+    lastShippingUnavailable: false,
     dbAvailable: false,
     dbCol: null,
     contentDoc: null,
@@ -1682,11 +1766,14 @@
       document.getElementById('accGreetName').textContent = currentUser.displayName || currentUser.email || '';
       document.getElementById('accGreetEmail').textContent = currentUser.email || '';
       document.getElementById('accPhone').value = (currentCustomer && currentCustomer.phone) || '';
+      document.getElementById('accCep').value = (currentCustomer && currentCustomer.cep) || '';
+      document.getElementById('accComplement').value = (currentCustomer && currentCustomer.complement) || '';
       document.getElementById('accStreet').value = (currentCustomer && currentCustomer.street) || '';
       document.getElementById('accNumber').value = (currentCustomer && currentCustomer.number) || '';
       document.getElementById('accNeighborhood').value = (currentCustomer && currentCustomer.neighborhood) || '';
       document.getElementById('accCity').value = (currentCustomer && currentCustomer.city) || '';
       document.getElementById('accState').value = (currentCustomer && currentCustomer.state) || '';
+      document.getElementById('accCepStatus').textContent = '';
       pendingProfilePhoto = undefined;
       renderAccountPhotoPreview((currentCustomer && currentCustomer.photo) || '');
     }
@@ -2347,36 +2434,64 @@
   }
 
   // Calcula e exibe o frete (ou some com ele, na retirada) e o total final.
+  // O cálculo de frete por distância é assíncrono (geocodificação), então o frete some
+  // como "calculando..." e o total é atualizado de novo quando o resultado chega —
+  // nunca usa um valor inventado enquanto isso.
   function renderDeliverySummary(subtotal){
     var isEntrega = state.deliveryMethod === 'entrega';
     document.getElementById('deliveryOptEntrega').classList.toggle('active', isEntrega);
     document.getElementById('deliveryOptRetirada').classList.toggle('active', !isEntrega);
+    document.getElementById('cartCepCalcBox').classList.toggle('hide', !isEntrega);
     var shippingRow = document.getElementById('cartShippingRow');
     var note = document.getElementById('deliveryNote');
-    var fee = 0;
-    if(isEntrega){
-      shippingRow.classList.remove('hide');
-      var neighborhood = currentCustomer && currentCustomer.neighborhood;
-      var calc = calcShippingFee(neighborhood, subtotal);
-      fee = calc.fee;
-      document.getElementById('cartShipping').textContent = fmt(fee);
-      if(calc.free){
-        note.textContent = 'Frete grátis aplicado! Sua compra atingiu o valor mínimo para entrega sem custo.';
-      } else if(!neighborhood){
-        note.textContent = 'Preencha seu endereço em "Minha conta" para calcularmos o frete do seu bairro.';
-      } else if(calc.matched){
-        note.textContent = 'Frete calculado para o bairro ' + neighborhood + '.';
-      } else {
-        note.textContent = 'Usando o valor padrão de entrega para o bairro ' + neighborhood + '.';
-      }
+
+    if(!isEntrega){
+      shippingRow.classList.add('hide');
+      var origin = getShippingConfig().origin || {};
+      var originTxt = [origin.street, origin.number, origin.neighborhood, origin.city].filter(Boolean).join(', ');
+      note.textContent = originTxt
+        ? 'Retirada no ateliê: ' + originTxt + '. Combine o horário com a loja.'
+        : 'Combine com a loja o endereço e o horário para retirar seu pedido.';
+      state.lastShippingFee = 0; state.lastShippingUnavailable = false;
+      renderNonShippingTotals(subtotal, 0);
+      return;
+    }
+    shippingRow.classList.remove('hide');
+    if(!currentCustomer || !normalizeCep(currentCustomer.cep)){
+      note.textContent = 'Preencha seu endereço (com CEP) em "Minha conta" para calcularmos o frete, ou use o campo abaixo para simular.';
+      document.getElementById('cartShipping').textContent = '—';
+      state.lastShippingFee = 0; state.lastShippingUnavailable = true;
+      renderNonShippingTotals(subtotal, 0);
+      return;
+    }
+    document.getElementById('cartShipping').textContent = 'calculando...';
+    calcShippingFee(currentCustomer, subtotal, false).then(function(res){
+      state.lastShippingFee = res.unavailable ? 0 : (Number(res.fee)||0);
+      state.lastShippingUnavailable = !!res.unavailable;
+      document.getElementById('cartShipping').textContent = res.unavailable ? 'indisponível' : fmt(res.fee);
+      if(res.unavailable){ note.textContent = res.message; }
+      else if(res.free){ note.textContent = 'Frete grátis aplicado! Sua compra atingiu o valor mínimo para entrega sem custo.'; }
+      else if(res.rule==='regra_distancia'){ note.textContent = 'Frete calculado por distância (~'+res.distanceKm.toFixed(1)+' km da loja).'; }
+      else if(res.rule==='excecao_bairro'){ note.textContent = 'Valor especial de frete para o seu bairro.'; }
+      else if(res.rule==='excecao_cep'){ note.textContent = 'Valor especial de frete para o seu CEP.'; }
+      else if(res.rule==='regra_municipio'){ note.textContent = 'Frete calculado para o seu município.'; }
+      else { note.textContent = 'Frete padrão aplicado ao seu endereço.'; }
       var freeMin = getShippingConfig().freeMin;
-      if(!calc.free && freeMin > 0 && subtotal < freeMin){
+      if(!res.free && !res.unavailable && freeMin > 0 && subtotal < freeMin){
         note.textContent += ' Faltam ' + fmt(freeMin - subtotal) + ' para frete grátis.';
       }
-    } else {
-      shippingRow.classList.add('hide');
-      note.textContent = 'Combine com a loja o endereço e o horário para retirar seu pedido.';
-    }
+      renderNonShippingTotals(subtotal, state.lastShippingFee);
+    }).catch(function(){
+      document.getElementById('cartShipping').textContent = 'indisponível';
+      note.textContent = 'Não foi possível calcular automaticamente o valor da entrega para este endereço. Verifique os dados informados ou escolha outra forma de entrega.';
+      state.lastShippingFee = 0; state.lastShippingUnavailable = true;
+      renderNonShippingTotals(subtotal, 0);
+    });
+  }
+
+  // Desconto, cartão com mensagem, pagamento e total — separado do frete porque
+  // o frete chega de forma assíncrona e pode atualizar o total mais tarde.
+  function renderNonShippingTotals(subtotal, fee){
     var effCoupon = effectiveCoupon();
     var discount = effCoupon ? subtotal * (Number(effCoupon.percent)||0) / 100 : 0;
     var discRow = document.getElementById('cartDiscountRow');
@@ -2407,6 +2522,24 @@
     document.getElementById('cartGift').textContent = fmt(giftFee);
     document.getElementById('cartTotal').textContent = fmt(subtotal - discount + fee + giftFee);
   }
+
+  // "Calcular frete" no carrinho: simulação por CEP (não altera o endereço salvo do cliente).
+  document.getElementById('cartSimBtn').addEventListener('click', function(){
+    var out = document.getElementById('cartSimResult');
+    var cep = normalizeCep(document.getElementById('cartSimCep').value);
+    if(cep.length !== 8){ out.textContent = 'Digite um CEP válido (8 dígitos).'; out.style.color='var(--badge)'; return; }
+    out.textContent = 'Calculando frete...'; out.style.color='var(--ink-soft)';
+    var subtotal = state.cart.reduce(function(s,it){ return s + unitPrice(it)*it.qty; }, 0);
+    fetchCepAddress(cep).then(function(addr){
+      return calcShippingFee(addr, subtotal, false).then(function(res){
+        if(res.unavailable){ out.textContent = res.message; out.style.color='var(--badge)'; return; }
+        var loc = 'Entrega para: ' + (addr.neighborhood || addr.city) + ' - ' + addr.city + '/' + addr.state;
+        var dist = res.distanceKm!=null ? ' · Distância aproximada: ' + res.distanceKm.toFixed(1) + ' km' : '';
+        out.style.color='var(--rose-dark)';
+        out.textContent = loc + dist + ' · Frete: ' + (res.free ? 'GRÁTIS' : fmt(res.fee));
+      });
+    }).catch(function(err){ out.textContent = err.message || 'Não foi possível calcular o frete para esse CEP.'; out.style.color='var(--badge)'; });
+  });
 
   document.getElementById('payMethods').addEventListener('click', function(e){
     var b = e.target.closest('[data-pay]'); if(!b) return;
@@ -2484,9 +2617,9 @@
     var total = order.total != null ? order.total : (order.subtotal + shippingFee);
 
     // endereço em linhas naturais, ignorando o que estiver vazio
-    var street = [c.street, c.number ? 'nº ' + c.number : ''].filter(Boolean).join(', ');
+    var street = [c.street, c.number ? 'nº ' + c.number : '', c.complement].filter(Boolean).join(', ');
     var cityUf = [c.city, c.state ? String(c.state).toUpperCase() : ''].filter(Boolean).join(' — ');
-    var addressLines = [street, c.neighborhood, cityUf].filter(Boolean);
+    var addressLines = [street, c.neighborhood, cityUf, c.cep ? 'CEP ' + formatCep(c.cep) : ''].filter(Boolean);
 
     var L = [];
     L.push('🧶 *Novo pedido — LesAteliê*');
@@ -2582,53 +2715,73 @@
       name: (currentUser && currentUser.displayName) || (currentCustomer && currentCustomer.name) || '',
       email: (currentUser && currentUser.email) || '',
       phone: (currentCustomer && currentCustomer.phone) || '',
+      cep: (currentCustomer && currentCustomer.cep) || '',
       street: (currentCustomer && currentCustomer.street) || '',
       number: (currentCustomer && currentCustomer.number) || '',
+      complement: (currentCustomer && currentCustomer.complement) || '',
       neighborhood: (currentCustomer && currentCustomer.neighborhood) || '',
       city: (currentCustomer && currentCustomer.city) || '',
       state: (currentCustomer && currentCustomer.state) || ''
     };
   }
 
+  // Recalcula o frete NA HORA de finalizar (nunca reaproveita um valor vindo do carrinho/tela),
+  // e trava o pedido se a entrega estiver indefinida ou indisponível. Guarda no pedido todo o
+  // histórico da regra usada (seção 20) — se as tarifas mudarem depois, este pedido não muda.
   function finalizeCheckout(){
     var subtotal = state.cart.reduce(function(s,it){ return s + unitPrice(it)*it.qty; }, 0);
     var isEntrega = state.deliveryMethod === 'entrega';
-    var shippingFee = isEntrega ? calcShippingFee(currentCustomer && currentCustomer.neighborhood, subtotal).fee : 0;
-    var effCoupon = effectiveCoupon();
-    var discount = effCoupon ? subtotal * (Number(effCoupon.percent)||0) / 100 : 0;
-    var giftFee = giftActive() ? getGiftConfig().price : 0;
-    var payload = {
-      uid: currentUser.uid,
-      customerEmail: currentUser.email || '',
-      customer: customerSnapshot(),
-      items: state.cart.map(function(it){ return {productId:it.productId, name:it.name, qty:it.qty, price:it.price, color:it.color||'', size:it.size, model:it.model, line:it.line, packaging:it.packaging||'', packagingPrice:Number(it.packagingPrice)||0}; }),
-      subtotal: subtotal,
-      discount: discount,
-      couponCode: effCoupon ? effCoupon.code : null,
-      deliveryMethod: state.deliveryMethod,
-      shippingFee: shippingFee,
-      paymentMethod: (MP_CREATE_URL && state.payMethod==='card') ? 'card' : 'pix',
-      giftCard: giftActive() ? {message: state.giftMessage.trim(), fee: giftFee} : null,
-      total: subtotal - discount + shippingFee + giftFee
-    };
-    createOrder(payload).then(function(created){
-      var isCard = created.data.paymentMethod === 'card';
-      if(!isCard){
-        var message = buildOrderMessage(created.data);
-        window.open('https://wa.me/'+STORE_WHATSAPP+'?text='+encodeURIComponent(message), '_blank', 'noopener');
+    var isPickup = !isEntrega;
+    var shipPromise = isPickup
+      ? calcShippingFee(null, subtotal, true)
+      : calcShippingFee(customerSnapshot(), subtotal, false);
+
+    shipPromise.then(function(shipRes){
+      if(!isPickup && (shipRes.unavailable || shipRes.fee==null)){
+        toast(shipRes.message || 'Não foi possível calcular o frete para o seu endereço. O pedido não pode ser concluído com o frete indefinido.', 'error');
+        return;
       }
-      toast('Pedido #'+String(created.data.orderNumber).padStart(6,'0')+' registrado! Confirme o envio no WhatsApp para garantir sua compra.', 'success');
-      state.cart = [];
-      state.giftOn = false; state.giftMessage = '';
-      document.getElementById('giftMsg').value = ''; document.getElementById('giftCount').textContent = '0'; document.getElementById('giftCheck').checked = false;
-      state.appliedCoupon = null;
-      document.getElementById('couponInput').value = '';
-      document.getElementById('couponMsg').textContent = '';
-      saveCart();
-      renderCart();
-      renderCartCount();
-      setTimeout(function(){ document.getElementById('cartOverlay').classList.add('hide'); }, 1400);
-      if(isCard) startCardPayment(created.id);
+      var shippingFee = Number(shipRes.fee)||0;
+      var effCoupon = effectiveCoupon();
+      var discount = effCoupon ? subtotal * (Number(effCoupon.percent)||0) / 100 : 0;
+      var giftFee = giftActive() ? getGiftConfig().price : 0;
+      var payload = {
+        uid: currentUser.uid,
+        customerEmail: currentUser.email || '',
+        customer: customerSnapshot(),
+        items: state.cart.map(function(it){ return {productId:it.productId, name:it.name, qty:it.qty, price:it.price, color:it.color||'', size:it.size, model:it.model, line:it.line, packaging:it.packaging||'', packagingPrice:Number(it.packagingPrice)||0}; }),
+        subtotal: subtotal,
+        discount: discount,
+        couponCode: effCoupon ? effCoupon.code : null,
+        deliveryMethod: state.deliveryMethod,
+        shippingFee: shippingFee,
+        shippingFree: !!shipRes.free,
+        shippingRule: shipRes.rule || null,
+        shippingMethod: shipRes.method || null,
+        shippingDistanceKm: shipRes.distanceKm!=null ? Number(shipRes.distanceKm.toFixed(2)) : null,
+        paymentMethod: (MP_CREATE_URL && state.payMethod==='card') ? 'card' : 'pix',
+        giftCard: giftActive() ? {message: state.giftMessage.trim(), fee: giftFee} : null,
+        total: subtotal - discount + shippingFee + giftFee
+      };
+      return createOrder(payload).then(function(created){
+        var isCard = created.data.paymentMethod === 'card';
+        if(!isCard){
+          var message = buildOrderMessage(created.data);
+          window.open('https://wa.me/'+STORE_WHATSAPP+'?text='+encodeURIComponent(message), '_blank', 'noopener');
+        }
+        toast('Pedido #'+String(created.data.orderNumber).padStart(6,'0')+' registrado! Confirme o envio no WhatsApp para garantir sua compra.', 'success');
+        state.cart = [];
+        state.giftOn = false; state.giftMessage = '';
+        document.getElementById('giftMsg').value = ''; document.getElementById('giftCount').textContent = '0'; document.getElementById('giftCheck').checked = false;
+        state.appliedCoupon = null;
+        document.getElementById('couponInput').value = '';
+        document.getElementById('couponMsg').textContent = '';
+        saveCart();
+        renderCart();
+        renderCartCount();
+        setTimeout(function(){ document.getElementById('cartOverlay').classList.add('hide'); }, 1400);
+        if(isCard) startCardPayment(created.id);
+      });
     }).catch(function(err){
       console.error(err);
       toast('Não foi possível registrar seu pedido agora. Tente novamente em instantes.', 'error');
@@ -2877,6 +3030,25 @@
   });
 
   var pendingProfilePhoto; // undefined = no change, '' = remove, dataUrl = new photo
+  document.getElementById('accCep').addEventListener('blur', function(){
+    var status = document.getElementById('accCepStatus');
+    var cep = normalizeCep(this.value);
+    this.value = formatCep(cep);
+    if(!cep){ status.textContent = ''; return; }
+    if(cep.length !== 8){ status.textContent = 'CEP incompleto.'; status.style.color = 'var(--badge)'; return; }
+    status.textContent = 'Buscando endereço...'; status.style.color = 'var(--ink-soft)';
+    fetchCepAddress(cep).then(function(addr){
+      document.getElementById('accStreet').value = addr.street || document.getElementById('accStreet').value;
+      document.getElementById('accNeighborhood').value = addr.neighborhood || document.getElementById('accNeighborhood').value;
+      document.getElementById('accCity').value = addr.city || document.getElementById('accCity').value;
+      document.getElementById('accState').value = addr.state || document.getElementById('accState').value;
+      status.textContent = 'Endereço encontrado — confira e complete o número.'; status.style.color = 'var(--rose-dark)';
+    }).catch(function(err){
+      status.textContent = err.message || 'Não foi possível localizar esse CEP. Preencha manualmente.';
+      status.style.color = 'var(--badge)';
+    });
+  });
+
   document.getElementById('accPhotoFile').addEventListener('change', function(e){
     var file = e.target.files && e.target.files[0];
     if(!file) return;
@@ -2895,6 +3067,13 @@
   document.getElementById('accSaveProfile').addEventListener('click', function(){
     if(!currentUser || !db) return;
     currentCustomer = currentCustomer || {};
+    var newCep = normalizeCep(document.getElementById('accCep').value);
+    if(newCep !== normalizeCep(currentCustomer.cep)){
+      // Endereço mudou de CEP: descarta lat/lng cacheadas, serão recalculadas na próxima simulação/pedido
+      delete currentCustomer.lat; delete currentCustomer.lng;
+    }
+    currentCustomer.cep = newCep;
+    currentCustomer.complement = document.getElementById('accComplement').value.trim();
     currentCustomer.phone = document.getElementById('accPhone').value.trim();
     currentCustomer.street = document.getElementById('accStreet').value.trim();
     currentCustomer.number = document.getElementById('accNumber').value.trim();
@@ -3197,79 +3376,430 @@
     return saveSiteContentField('aboutImage', dataUrl || null);
   }
 
-  /* ---------------- FRETE (entrega x retirada, valor por bairro) ---------------- */
+  /* ================= FRETE — distância (regra principal), município e bairro/CEP (exceções) ================= */
   function normalizeText(s){
     return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
+  function normalizeCep(s){ return String(s||'').replace(/\D/g,'').slice(0,8); }
+  function formatCep(s){ var c = normalizeCep(s); return c.length===8 ? c.slice(0,5)+'-'+c.slice(5) : c; }
+
+  // Config completa de frete, com migração automática do formato antigo
+  // (base + rates por bairro) para o novo modelo (métodos + faixas + exceções).
   function getShippingConfig(){
-    var cfg = (state.siteContent && state.siteContent.shipping) || {};
-    return {base: Number(cfg.base)||0, freeMin: Number(cfg.freeMin)||0, rates: Array.isArray(cfg.rates) ? cfg.rates : []};
+    var raw = (state.siteContent && state.siteContent.shipping) || {};
+    return {
+      method: raw.method || 'distance', // 'distance' | 'city' | 'neighborhood'
+      base: Number(raw.base)||0, // usado apenas no método "por bairro" quando não há exceção cadastrada
+      freeMin: Number(raw.freeMin)||0,
+      origin: raw.origin || {},
+      maxDistanceKm: raw.maxDistanceKm!=null ? Number(raw.maxDistanceKm) : 15,
+      tiers: Array.isArray(raw.tiers) ? raw.tiers : [],
+      cap: raw.cap || {enabled:false, max:0, behavior:'limit'},
+      cityRates: Array.isArray(raw.cityRates) ? raw.cityRates : [],
+      // "rates" é o nome antigo do campo de exceções por bairro — mantido por compatibilidade.
+      neighborhoodExceptions: Array.isArray(raw.rates) ? raw.rates : (Array.isArray(raw.neighborhoodExceptions) ? raw.neighborhoodExceptions : []),
+      cepExceptions: Array.isArray(raw.cepExceptions) ? raw.cepExceptions : []
+    };
   }
   function saveShippingConfig(cfg){
-    return saveSiteContentField('shipping', cfg);
-  }
-  // Retorna o valor do frete para um bairro: usa o valor específico cadastrado
-  // pela loja quando existe, senão cai no valor base. Se um valor mínimo de
-  // frete grátis estiver configurado e o subtotal atingi-lo, o frete zera.
-  function calcShippingFee(neighborhood, subtotal){
-    var cfg = getShippingConfig();
-    if(cfg.freeMin > 0 && Number(subtotal||0) >= cfg.freeMin){
-      return {fee: 0, matched: true, free: true};
-    }
-    var norm = normalizeText(neighborhood);
-    if(norm){
-      var match = cfg.rates.find(function(r){ return normalizeText(r.name) === norm; });
-      if(match) return {fee: Number(match.fee)||0, matched:true};
-    }
-    return {fee: cfg.base, matched:false};
+    // grava sempre no formato novo; "rates" é escrito também por compatibilidade com versões antigas do painel.
+    var payload = Object.assign({}, cfg, {rates: cfg.neighborhoodExceptions});
+    return saveSiteContentField('shipping', payload);
   }
 
+  /* ---- CEP (ViaCEP) e geocodificação (OpenStreetMap Nominatim) ---- */
+  // Serviço gratuito de CEP. Preenche o endereço automaticamente, mas sempre permite revisão manual.
+  function fetchCepAddress(cep){
+    var clean = normalizeCep(cep);
+    if(clean.length !== 8) return Promise.reject(new Error('CEP inválido.'));
+    return fetch('https://viacep.com.br/ws/'+clean+'/json/').then(function(r){
+      if(!r.ok) throw new Error('Serviço de CEP indisponível agora.');
+      return r.json();
+    }).then(function(d){
+      if(d.erro) throw new Error('CEP não encontrado.');
+      return {cep:clean, street:d.logradouro||'', neighborhood:d.bairro||'', city:d.localidade||'', state:d.uf||''};
+    });
+  }
+  // Geocodificação gratuita (sem chave). É uma estimativa de posição — a arquitetura
+  // (armazenar lat/lng e reaproveitar) permite substituir depois por um serviço de rota real.
+  function geocodeAddress(addr){
+    var q = [addr.street, addr.number, addr.neighborhood, addr.city, addr.state, 'Brasil'].filter(Boolean).join(', ');
+    if(!q) return Promise.reject(new Error('Endereço incompleto para localizar.'));
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=' + encodeURIComponent(q);
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('Serviço de localização indisponível agora.');
+      return r.json();
+    }).then(function(list){
+      if(!list || !list.length) throw new Error('Não localizamos esse endereço no mapa.');
+      return {lat: parseFloat(list[0].lat), lng: parseFloat(list[0].lon)};
+    });
+  }
+  // Garante lat/lng de um endereço, reaproveitando cache se já existir (evita chamadas repetidas).
+  function ensureGeocode(addr){
+    if(addr && addr.lat!=null && addr.lng!=null) return Promise.resolve({lat:addr.lat, lng:addr.lng});
+    return geocodeAddress(addr).then(function(pos){
+      if(addr){ addr.lat = pos.lat; addr.lng = pos.lng; }
+      return pos;
+    });
+  }
+  function haversineKm(lat1, lng1, lat2, lng2){
+    function toRad(d){ return d*Math.PI/180; }
+    var R = 6371;
+    var dLat = toRad(lat2-lat1), dLng = toRad(lng2-lng1);
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  /* ---- Faixas de distância: validação (sem sobreposição, sem negativos, sem duplicadas) ---- */
+  function validateTiers(tiers){
+    var list = tiers.map(function(t){ return {min:Number(t.min)||0, max:Number(t.max)||0, fee:Number(t.fee)||0}; });
+    for(var i=0;i<list.length;i++){
+      if(list[i].min < 0 || list[i].max < 0) return {ok:false, error:'Distâncias não podem ser negativas.'};
+      if(list[i].fee < 0) return {ok:false, error:'O valor do frete não pode ser negativo.'};
+      if(list[i].max <= list[i].min) return {ok:false, error:'Em cada faixa, a distância final deve ser maior que a inicial.'};
+    }
+    var sorted = list.slice().sort(function(a,b){ return a.min-b.min; });
+    for(var j=1;j<sorted.length;j++){
+      if(sorted[j].min === sorted[j-1].min && sorted[j].max === sorted[j-1].max) return {ok:false, error:'Existem faixas duplicadas.'};
+      if(sorted[j].min < sorted[j-1].max) return {ok:false, error:'As faixas '+sorted[j-1].min+'–'+sorted[j-1].max+' km e '+sorted[j].min+'–'+sorted[j].max+' km se sobrepõem.'};
+    }
+    return {ok:true};
+  }
+  function findDistanceTier(km, tiers){
+    return (tiers||[]).find(function(t){ return km >= Number(t.min) && km <= Number(t.max); }) || null;
+  }
+
+  /* ---- Cálculo do frete: ordem de prioridade fixa (retirada > frete grátis > exceção
+     de CEP > exceção de bairro > regra de município > regra de distância > indisponível).
+     Nunca inventa distância nem valor: se não conseguir calcular, cai no fallback ou avisa. ---- */
+  function calcShippingFee(customer, subtotal, isPickup){
+    var cfg = getShippingConfig();
+    if(isPickup) return Promise.resolve({fee:0, matched:true, free:false, pickup:true, rule:'retirada', method:cfg.method});
+    if(cfg.freeMin > 0 && Number(subtotal||0) >= cfg.freeMin){
+      return Promise.resolve({fee:0, matched:true, free:true, rule:'frete_gratis', method:cfg.method});
+    }
+    customer = customer || {};
+    var cep = normalizeCep(customer.cep);
+    var neighborhood = normalizeText(customer.neighborhood);
+    var city = normalizeText(customer.city), ufState = normalizeText(customer.state);
+
+    if(cep){
+      var cepMatch = cfg.cepExceptions.find(function(e){ return e.active!==false && normalizeCep(e.cep)===cep; });
+      if(cepMatch) return Promise.resolve({fee:Number(cepMatch.fee)||0, matched:true, rule:'excecao_cep', method:cfg.method});
+    }
+    if(neighborhood){
+      var nMatch = cfg.neighborhoodExceptions.find(function(e){
+        if(e.active===false) return false;
+        if(normalizeText(e.name) !== neighborhood) return false;
+        return !e.city || normalizeText(e.city) === city;
+      });
+      if(nMatch) return Promise.resolve({fee:Number(nMatch.fee)||0, matched:true, rule:'excecao_bairro', method:cfg.method});
+    }
+    if(city){
+      var cMatch = cfg.cityRates.find(function(c){ return c.active!==false && normalizeText(c.city)===city && (!c.state || normalizeText(c.state)===ufState); });
+      if(cMatch) return Promise.resolve({fee:Number(cMatch.fee)||0, matched:true, rule:'regra_municipio', method:cfg.method});
+    }
+
+    if(cfg.method === 'city'){
+      return Promise.resolve({fee:null, matched:false, unavailable:true, rule:'indisponivel', method:cfg.method,
+        message:'No momento, o Lesateliê não realiza entregas para este município. Verifique a opção de retirada no local.'});
+    }
+    if(cfg.method === 'neighborhood'){
+      // modo simples (compatível com o modelo antigo): sem exceção cadastrada, usa o valor base fixo.
+      return Promise.resolve({fee:cfg.base, matched:false, rule:'valor_base', method:cfg.method});
+    }
+
+    // método padrão: por distância — precisa da origem da loja e do endereço do cliente geocodificados.
+    if(!cfg.origin || cfg.origin.lat==null || cfg.origin.lng==null){
+      return Promise.resolve({fee:null, matched:false, unavailable:true, rule:'indisponivel', method:cfg.method,
+        message:'Não foi possível calcular automaticamente o valor da entrega para este endereço. Verifique os dados informados ou escolha outra forma de entrega.'});
+    }
+    return ensureGeocode(customer).then(function(pos){
+      var km = haversineKm(cfg.origin.lat, cfg.origin.lng, pos.lat, pos.lng);
+      if(cfg.maxDistanceKm > 0 && km > cfg.maxDistanceKm){
+        return {fee:null, matched:false, unavailable:true, rule:'indisponivel', method:cfg.method, distanceKm:km,
+          message:'No momento, o Lesateliê não realiza entregas para este endereço (fora do raio de '+cfg.maxDistanceKm+' km). Verifique a opção de retirada no local.'};
+      }
+      var tier = findDistanceTier(km, cfg.tiers);
+      if(!tier){
+        return {fee:null, matched:false, unavailable:true, rule:'indisponivel', method:cfg.method, distanceKm:km,
+          message:'Não foi possível calcular automaticamente o valor da entrega para este endereço. Verifique os dados informados ou escolha outra forma de entrega.'};
+      }
+      var fee = Number(tier.fee)||0;
+      if(cfg.cap && cfg.cap.enabled && fee > Number(cfg.cap.max)){
+        if(cfg.cap.behavior === 'unavailable'){
+          return {fee:null, matched:false, unavailable:true, rule:'indisponivel', method:cfg.method, distanceKm:km,
+            message:'No momento, o Lesateliê não realiza entregas para este endereço. Verifique a opção de retirada no local.'};
+        }
+        fee = Number(cfg.cap.max);
+      }
+      return {fee:fee, matched:true, rule:'regra_distancia', method:cfg.method, distanceKm:km, tier:tier};
+    }).catch(function(){
+      // Nunca inventa distância nem valor — se não conseguiu calcular, tenta cair no fallback (já tratado acima) e senão avisa.
+      return {fee:null, matched:false, unavailable:true, rule:'indisponivel', method:cfg.method,
+        message:'Não foi possível calcular automaticamente o valor da entrega para este endereço. Verifique os dados informados ou escolha outra forma de entrega.'};
+    });
+  }
+
+  /* ---- Painel administrativo: Configurações → Entrega e Frete ---- */
   function openShippingAdmin(){
     document.getElementById('adminShippingOverlay').classList.remove('hide');
     var cfg = getShippingConfig();
-    document.getElementById('shipBaseInput').value = cfg.base || '';
+    document.querySelectorAll('#shipMethodTabs [data-method]').forEach(function(b){ b.classList.toggle('active', b.dataset.method===cfg.method); });
+    document.getElementById('shipDistanceBlock').classList.toggle('hide', cfg.method!=='distance');
+    document.getElementById('shipCityBlock').classList.toggle('hide', cfg.method!=='city');
+
+    var o = cfg.origin || {};
+    document.getElementById('shipOriginCep').value = o.cep ? formatCep(o.cep) : '';
+    document.getElementById('shipOriginNumber').value = o.number || '';
+    document.getElementById('shipOriginStreet').value = o.street || '';
+    document.getElementById('shipOriginNeighborhood').value = o.neighborhood || '';
+    document.getElementById('shipOriginCity').value = o.city || '';
+    document.getElementById('shipOriginState').value = o.state || '';
+    document.getElementById('shipOriginGeoStatus').textContent = (o.lat!=null) ? 'Localização salva ✓' : 'Localização ainda não calculada — salve o endereço.';
+
+    document.getElementById('shipMaxKm').value = cfg.maxDistanceKm || '';
+    document.getElementById('shipCapEnabled').checked = !!(cfg.cap && cfg.cap.enabled);
+    document.getElementById('shipCapFields').classList.toggle('hide', !(cfg.cap && cfg.cap.enabled));
+    document.getElementById('shipCapMax').value = (cfg.cap && cfg.cap.max) || '';
+    document.getElementById('shipCapBehavior').value = (cfg.cap && cfg.cap.behavior) || 'limit';
     document.getElementById('shipFreeMinInput').value = cfg.freeMin || '';
-    var body = document.getElementById('shipRatesBody');
-    body.innerHTML = '';
-    if(cfg.rates.length===0){
-      body.innerHTML = '<p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0;">Nenhum bairro cadastrado ainda. Bairros não listados usam o valor base.</p>';
-    }
-    cfg.rates.forEach(function(r, idx){
-      var row = document.createElement('div');
-      row.className = 'ship-rate-row';
+
+    renderTiersTable(cfg.tiers);
+    renderCityRatesTable(cfg.cityRates);
+    renderNeighborhoodExceptionsTable(cfg.neighborhoodExceptions);
+    renderCepExceptionsTable(cfg.cepExceptions);
+    document.getElementById('shipSimResult').style.display = 'none';
+  }
+
+  function renderTiersTable(tiers){
+    var body = document.getElementById('shipTiersBody');
+    body.innerHTML = tiers.length ? '' : '<p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0;">Nenhuma faixa cadastrada ainda.</p>';
+    tiers.forEach(function(t, idx){
+      var row = document.createElement('div'); row.className = 'ship-rate-row';
       row.innerHTML =
-        '<input type="text" value="'+(r.name||'').replace(/"/g,'&quot;')+'" placeholder="Nome do bairro" data-ship-name="'+idx+'">'+
-        '<input type="number" step="0.01" min="0" class="ship-fee-input" value="'+(r.fee!=null?r.fee:'')+'" placeholder="0,00" data-ship-fee="'+idx+'">'+
+        '<input type="number" step="0.1" min="0" value="'+(t.min!=null?t.min:'')+'" placeholder="de (km)" data-tier-min="'+idx+'">'+
+        '<input type="number" step="0.1" min="0" value="'+(t.max!=null?t.max:'')+'" placeholder="até (km)" data-tier-max="'+idx+'">'+
+        '<input type="number" step="0.01" min="0" class="ship-fee-input" value="'+(t.fee!=null?t.fee:'')+'" placeholder="R$" data-tier-fee="'+idx+'">'+
+        '<button type="button" class="admin-mini" style="background:var(--badge);" data-tier-remove="'+idx+'">Remover</button>';
+      body.appendChild(row);
+    });
+  }
+  function renderCityRatesTable(rates){
+    var body = document.getElementById('shipCityBody');
+    body.innerHTML = rates.length ? '' : '<p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0;">Nenhum município cadastrado ainda.</p>';
+    rates.forEach(function(r, idx){
+      var row = document.createElement('div'); row.className = 'ship-rate-row';
+      row.innerHTML =
+        '<input type="text" value="'+esc(r.city)+'" placeholder="Município" data-city-name="'+idx+'">'+
+        '<input type="text" value="'+esc(r.state)+'" placeholder="UF" maxlength="2" class="ship-uf-input" data-city-state="'+idx+'">'+
+        '<input type="number" step="0.01" min="0" class="ship-fee-input" value="'+(r.fee!=null?r.fee:'')+'" placeholder="R$" data-city-fee="'+idx+'">'+
+        '<label class="ship-active-check"><input type="checkbox" '+(r.active!==false?'checked':'')+' data-city-active="'+idx+'">ativo</label>'+
+        '<button type="button" class="admin-mini" style="background:var(--badge);" data-city-remove="'+idx+'">Remover</button>';
+      body.appendChild(row);
+    });
+  }
+  function renderNeighborhoodExceptionsTable(list){
+    var body = document.getElementById('shipRatesBody');
+    body.innerHTML = list.length ? '' : '<p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0;">Nenhuma exceção de bairro cadastrada.</p>';
+    list.forEach(function(r, idx){
+      var row = document.createElement('div'); row.className = 'ship-rate-row';
+      row.innerHTML =
+        '<input type="text" value="'+esc(r.name)+'" placeholder="Bairro" data-ship-name="'+idx+'">'+
+        '<input type="text" value="'+esc(r.city||'')+'" placeholder="Município (opcional)" data-ship-city="'+idx+'">'+
+        '<input type="number" step="0.01" min="0" class="ship-fee-input" value="'+(r.fee!=null?r.fee:'')+'" placeholder="R$" data-ship-fee="'+idx+'">'+
+        '<label class="ship-active-check"><input type="checkbox" '+(r.active!==false?'checked':'')+' data-ship-active="'+idx+'">ativo</label>'+
         '<button type="button" class="admin-mini" style="background:var(--badge);" data-ship-remove="'+idx+'">Remover</button>';
       body.appendChild(row);
     });
   }
+  function renderCepExceptionsTable(list){
+    var body = document.getElementById('shipCepExcBody');
+    body.innerHTML = list.length ? '' : '<p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0;">Nenhuma exceção de CEP cadastrada.</p>';
+    list.forEach(function(r, idx){
+      var row = document.createElement('div'); row.className = 'ship-rate-row';
+      row.innerHTML =
+        '<input type="text" value="'+(r.cep?formatCep(r.cep):'')+'" placeholder="00000-000" maxlength="9" data-cep-value="'+idx+'">'+
+        '<input type="number" step="0.01" min="0" class="ship-fee-input" value="'+(r.fee!=null?r.fee:'')+'" placeholder="R$" data-cep-fee="'+idx+'">'+
+        '<label class="ship-active-check"><input type="checkbox" '+(r.active!==false?'checked':'')+' data-cep-active="'+idx+'">ativo</label>'+
+        '<button type="button" class="admin-mini" style="background:var(--badge);" data-cep-remove="'+idx+'">Remover</button>';
+      body.appendChild(row);
+    });
+  }
+
+  /* -- método principal -- */
+  document.getElementById('shipMethodTabs').addEventListener('click', function(e){
+    var b = e.target.closest('[data-method]'); if(!b) return;
+    var cfg = getShippingConfig(); cfg.method = b.dataset.method;
+    saveShippingConfig(cfg); openShippingAdmin();
+    toast('Método de entrega definido como "'+b.textContent.trim()+'"', 'success');
+  });
+
+  /* -- origem da loja -- */
+  document.getElementById('shipOriginCep').addEventListener('blur', function(){
+    var status = document.getElementById('shipOriginCepStatus');
+    var cep = normalizeCep(this.value); this.value = formatCep(cep);
+    if(!cep) { status.textContent=''; return; }
+    if(cep.length!==8){ status.textContent = 'CEP incompleto.'; status.style.color='var(--badge)'; return; }
+    status.textContent = 'Buscando endereço...'; status.style.color='var(--ink-soft)';
+    fetchCepAddress(cep).then(function(addr){
+      document.getElementById('shipOriginStreet').value = addr.street || '';
+      document.getElementById('shipOriginNeighborhood').value = addr.neighborhood || '';
+      document.getElementById('shipOriginCity').value = addr.city || '';
+      document.getElementById('shipOriginState').value = addr.state || '';
+      status.textContent = 'Endereço encontrado — confira e complete o número.'; status.style.color='var(--rose-dark)';
+    }).catch(function(err){ status.textContent = err.message; status.style.color='var(--badge)'; });
+  });
+  document.getElementById('shipOriginSave').addEventListener('click', function(){
+    var cfg = getShippingConfig();
+    var geoStatus = document.getElementById('shipOriginGeoStatus');
+    var newOrigin = {
+      cep: normalizeCep(document.getElementById('shipOriginCep').value),
+      number: document.getElementById('shipOriginNumber').value.trim(),
+      street: document.getElementById('shipOriginStreet').value.trim(),
+      neighborhood: document.getElementById('shipOriginNeighborhood').value.trim(),
+      city: document.getElementById('shipOriginCity').value.trim(),
+      state: document.getElementById('shipOriginState').value.trim().toUpperCase()
+    };
+    var oldOrigin = cfg.origin || {};
+    var changed = ['cep','number','street','neighborhood','city','state'].some(function(k){ return (oldOrigin[k]||'') !== (newOrigin[k]||''); });
+    if(!changed && oldOrigin.lat!=null){ newOrigin.lat = oldOrigin.lat; newOrigin.lng = oldOrigin.lng; }
+    cfg.origin = newOrigin;
+    geoStatus.textContent = 'Localizando endereço da loja no mapa...'; geoStatus.style.color='var(--ink-soft)';
+    (newOrigin.lat!=null ? Promise.resolve({lat:newOrigin.lat,lng:newOrigin.lng}) : geocodeAddress(newOrigin)).then(function(pos){
+      cfg.origin.lat = pos.lat; cfg.origin.lng = pos.lng;
+      saveShippingConfig(cfg);
+      geoStatus.textContent = 'Localização salva ✓'; geoStatus.style.color='var(--rose-dark)';
+      toast('Endereço de origem salvo', 'success');
+    }).catch(function(err){
+      saveShippingConfig(cfg); // salva o endereço mesmo sem lat/lng — pode tentar de novo depois
+      geoStatus.textContent = 'Endereço salvo, mas não conseguimos localizá-lo no mapa ainda: ' + err.message;
+      geoStatus.style.color='var(--badge)';
+    });
+  });
+
+  /* -- faixas de distância -- */
+  document.getElementById('shipAddTier').addEventListener('click', function(){
+    var cfg = getShippingConfig(); cfg.tiers.push({min:0, max:0, fee:0});
+    saveShippingConfig(cfg); openShippingAdmin();
+  });
+  document.getElementById('shipTiersBody').addEventListener('click', function(e){
+    var rm = e.target.closest('[data-tier-remove]'); if(!rm) return;
+    var cfg = getShippingConfig(); cfg.tiers.splice(Number(rm.dataset.tierRemove),1);
+    saveShippingConfig(cfg); openShippingAdmin();
+  });
+  document.getElementById('shipTiersBody').addEventListener('change', function(e){
+    var cfg = getShippingConfig();
+    var i = e.target.dataset.tierMin, j = e.target.dataset.tierMax, k = e.target.dataset.tierFee;
+    if(i!==undefined) cfg.tiers[i].min = Number(e.target.value)||0;
+    if(j!==undefined) cfg.tiers[j].max = Number(e.target.value)||0;
+    if(k!==undefined) cfg.tiers[k].fee = Number(e.target.value)||0;
+    document.getElementById('shipTiersError').textContent = '';
+    saveShippingConfig(cfg);
+  });
+  document.getElementById('shipDistanceSave').addEventListener('click', function(){
+    var cfg = getShippingConfig();
+    var check = validateTiers(cfg.tiers);
+    var errBox = document.getElementById('shipTiersError');
+    if(!check.ok){ errBox.textContent = check.error; return; }
+    errBox.textContent = '';
+    cfg.maxDistanceKm = Number(document.getElementById('shipMaxKm').value) || 0;
+    cfg.cap = {
+      enabled: document.getElementById('shipCapEnabled').checked,
+      max: Number(document.getElementById('shipCapMax').value) || 0,
+      behavior: document.getElementById('shipCapBehavior').value
+    };
+    saveShippingConfig(cfg);
+    toast('Configuração por distância salva', 'success');
+  });
+  document.getElementById('shipCapEnabled').addEventListener('change', function(){
+    document.getElementById('shipCapFields').classList.toggle('hide', !this.checked);
+  });
+
+  /* -- frete grátis -- */
   document.getElementById('shipBaseSave').addEventListener('click', function(){
     var cfg = getShippingConfig();
-    cfg.base = Number(document.getElementById('shipBaseInput').value) || 0;
     cfg.freeMin = Number(document.getElementById('shipFreeMinInput').value) || 0;
     saveShippingConfig(cfg);
-    toast('Configuração de frete salva', 'success');
+    toast('Frete grátis salvo', 'success');
   });
-  document.getElementById('shipAddRate').addEventListener('click', function(){
-    var cfg = getShippingConfig();
-    cfg.rates.push({name:'', fee:0});
+
+  /* -- exceções por município -- */
+  document.getElementById('shipAddCity').addEventListener('click', function(){
+    var cfg = getShippingConfig(); cfg.cityRates.push({city:'', state:'', fee:0, active:true});
+    saveShippingConfig(cfg); openShippingAdmin();
+  });
+  document.getElementById('shipCityBody').addEventListener('click', function(e){
+    var rm = e.target.closest('[data-city-remove]'); if(!rm) return;
+    var cfg = getShippingConfig(); cfg.cityRates.splice(Number(rm.dataset.cityRemove),1);
+    saveShippingConfig(cfg); openShippingAdmin();
+  });
+  document.getElementById('shipCityBody').addEventListener('change', function(e){
+    var cfg = getShippingConfig(), d = e.target.dataset;
+    if(d.cityName!==undefined) cfg.cityRates[d.cityName].city = e.target.value.trim();
+    if(d.cityState!==undefined) cfg.cityRates[d.cityState].state = e.target.value.trim().toUpperCase();
+    if(d.cityFee!==undefined) cfg.cityRates[d.cityFee].fee = Number(e.target.value)||0;
+    if(d.cityActive!==undefined) cfg.cityRates[d.cityActive].active = e.target.checked;
     saveShippingConfig(cfg);
-    openShippingAdmin();
   });
-  document.getElementById('shipRatesBody').addEventListener('change', function(e){
-    var nameIdx = e.target.dataset.shipName, feeIdx = e.target.dataset.shipFee;
-    var cfg = getShippingConfig();
-    if(nameIdx!==undefined){ cfg.rates[nameIdx].name = e.target.value; saveShippingConfig(cfg); }
-    if(feeIdx!==undefined){ cfg.rates[feeIdx].fee = Number(e.target.value)||0; saveShippingConfig(cfg); }
+
+  /* -- exceções por bairro -- */
+  document.getElementById('shipAddRate').addEventListener('click', function(){
+    var cfg = getShippingConfig(); cfg.neighborhoodExceptions.push({name:'', city:'', fee:0, active:true});
+    saveShippingConfig(cfg); openShippingAdmin();
   });
   document.getElementById('shipRatesBody').addEventListener('click', function(e){
-    var rm = e.target.closest('[data-ship-remove]');
-    if(!rm) return;
-    var cfg = getShippingConfig();
-    cfg.rates.splice(Number(rm.dataset.shipRemove), 1);
+    var rm = e.target.closest('[data-ship-remove]'); if(!rm) return;
+    var cfg = getShippingConfig(); cfg.neighborhoodExceptions.splice(Number(rm.dataset.shipRemove),1);
+    saveShippingConfig(cfg); openShippingAdmin();
+  });
+  document.getElementById('shipRatesBody').addEventListener('change', function(e){
+    var cfg = getShippingConfig(), d = e.target.dataset;
+    if(d.shipName!==undefined) cfg.neighborhoodExceptions[d.shipName].name = e.target.value.trim();
+    if(d.shipCity!==undefined) cfg.neighborhoodExceptions[d.shipCity].city = e.target.value.trim();
+    if(d.shipFee!==undefined) cfg.neighborhoodExceptions[d.shipFee].fee = Number(e.target.value)||0;
+    if(d.shipActive!==undefined) cfg.neighborhoodExceptions[d.shipActive].active = e.target.checked;
     saveShippingConfig(cfg);
-    openShippingAdmin();
+  });
+
+  /* -- exceções por CEP -- */
+  document.getElementById('shipAddCepExc').addEventListener('click', function(){
+    var cfg = getShippingConfig(); cfg.cepExceptions.push({cep:'', fee:0, active:true});
+    saveShippingConfig(cfg); openShippingAdmin();
+  });
+  document.getElementById('shipCepExcBody').addEventListener('click', function(e){
+    var rm = e.target.closest('[data-cep-remove]'); if(!rm) return;
+    var cfg = getShippingConfig(); cfg.cepExceptions.splice(Number(rm.dataset.cepRemove),1);
+    saveShippingConfig(cfg); openShippingAdmin();
+  });
+  document.getElementById('shipCepExcBody').addEventListener('change', function(e){
+    var cfg = getShippingConfig(), d = e.target.dataset;
+    if(d.cepValue!==undefined){ cfg.cepExceptions[d.cepValue].cep = normalizeCep(e.target.value); e.target.value = formatCep(e.target.value); }
+    if(d.cepFee!==undefined) cfg.cepExceptions[d.cepFee].fee = Number(e.target.value)||0;
+    if(d.cepActive!==undefined) cfg.cepExceptions[d.cepActive].active = e.target.checked;
+    saveShippingConfig(cfg);
+  });
+
+  /* -- simulador (TESTAR CÁLCULO DE FRETE) -- */
+  var SHIP_RULE_LABELS = {
+    retirada:'Retirada no local', frete_gratis:'Frete grátis', excecao_cep:'Exceção de CEP',
+    excecao_bairro:'Exceção de bairro', regra_municipio:'Regra por município', regra_distancia:'Regra por distância',
+    valor_base:'Valor base (bairro)', indisponivel:'Entrega indisponível'
+  };
+  document.getElementById('shipSimBtn').addEventListener('click', function(){
+    var box = document.getElementById('shipSimResult');
+    var cep = normalizeCep(document.getElementById('shipSimCep').value);
+    if(cep.length!==8){ box.style.display='block'; box.innerHTML = 'Digite um CEP válido (8 dígitos).'; return; }
+    box.style.display='block'; box.innerHTML = 'Calculando...';
+    fetchCepAddress(cep).then(function(addr){
+      return calcShippingFee(addr, 0, false).then(function(res){
+        var lines = ['<b>Endereço:</b> '+esc(addr.street)+' — '+esc(addr.neighborhood)+', '+esc(addr.city)+'/'+esc(addr.state)];
+        if(res.distanceKm!=null) lines.push('<b>Distância:</b> '+res.distanceKm.toFixed(1)+' km');
+        lines.push('<b>Regra aplicada:</b> '+(SHIP_RULE_LABELS[res.rule]||res.rule));
+        lines.push(res.unavailable ? '<b>Frete:</b> indisponível' : '<b>Frete:</b> '+fmt(res.fee));
+        box.innerHTML = lines.join('<br>');
+      });
+    }).catch(function(err){ box.innerHTML = err.message || 'Não foi possível simular este CEP.'; });
   });
 
   /* ---------------- PAINEL DE VENDAS (admin) ---------------- */

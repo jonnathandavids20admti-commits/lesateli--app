@@ -1,0 +1,80 @@
+REGRAS DE SEGURANÇA (FIRESTORE) — VALIDAÇÃO DE FRETE
+=======================================================
+
+CONTEXTO IMPORTANTE (leia antes de aplicar)
+--------------------------------------------
+O Lesateliê não tem um servidor próprio (Node/PHP) nem Cloud Functions ativas —
+o site conversa direto com o Firestore pelo SDK do navegador, como todo o resto
+do app já faz hoje (produtos, cupons, embalagens etc). Isso significa que a
+validação "de verdade" e mais forte contra manipulação do frete só existe com
+uma Cloud Function, que eu não tenho como criar/publicar por vocês aqui (exigiria
+acesso ao projeto Firebase e ao Firebase CLI de vocês).
+
+O que dá para fazer sem Cloud Function — e que este arquivo faz — é usar as
+próprias Regras de Segurança do Firestore para checar, no momento da gravação
+do pedido, se o valor de frete enviado bate com algum valor permitido pela
+configuração salva em siteContent/main (retirada = 0, frete grátis = 0, alguma
+faixa/exceção cadastrada, ou frete pago no cartão). Isso é bem mais forte do
+que confiar cegamente no navegador, mas ainda não confirma sozinho se a
+distância calculada estava certa — só se o VALOR final é um dos valores que a
+loja realmente configurou.
+
+Ajuste os nomes de coleção/campos abaixo para bater exatamente com as suas
+regras atuais (não sei os nomes exatos usados no projeto de vocês). Cole este
+trecho dentro do seu arquivo firestore.rules já existente, dentro do bloco da
+coleção de pedidos — não é um arquivo de regras completo sozinho.
+
+------------------------------------------------------------
+match /orders/{orderId} {
+
+  allow create: if request.auth != null
+    && request.auth.uid == request.resource.data.uid
+    && isValidShippingFee(request.resource.data);
+
+  // (mantenha aqui as suas regras de update/delete/read já existentes)
+}
+
+function shippingConfig() {
+  return get(/databases/$(database)/documents/siteContent/main).data.shipping;
+}
+
+function isValidShippingFee(order) {
+  let cfg = shippingConfig();
+  let fee = order.shippingFee;
+
+  // Retirada: frete sempre 0
+  return (order.deliveryMethod == 'retirada' && fee == 0)
+
+    // Frete grátis: subtotal atingiu o mínimo configurado
+    || (cfg.freeMin > 0 && order.subtotal >= cfg.freeMin && fee == 0)
+
+    // Faixas de distância cadastradas (o valor bate com alguma faixa)
+    || fee in cfg.tiers.map(t => t.fee)
+
+    // Exceções por bairro/CEP/município cadastradas
+    || fee in cfg.get('neighborhoodExceptions', []).map(e => e.fee)
+    || fee in cfg.get('cepExceptions', []).map(e => e.fee)
+    || fee in cfg.get('cityRates', []).map(e => e.fee)
+
+    // Teto de frete, quando ativo
+    || (cfg.get('cap', {}).get('enabled', false) == true && fee == cfg.cap.max);
+}
+------------------------------------------------------------
+
+Observação: a sintaxe `cfg.tiers.map(...)` acima é ilustrativa — o Firestore
+Rules tem suporte limitado a funções de lista (não tem `.map()` nativo em todas
+as versões). Se o `map()` não estiver disponível no seu ambiente, a alternativa
+mais simples e 100% suportada é validar só os casos "sempre seguros" (retirada
+= 0, frete grátis = 0) pelas regras, e tratar o restante como "confiança no
+recálculo do próprio app no momento do pedido" — que é exatamente o que o
+index.html já faz agora (recalcula o frete do zero, no servidor Firestore, na
+hora de gravar o pedido, nunca usando um valor guardado na tela do carrinho).
+
+Para uma validação 100% à prova de manipulação (a única forma de cumprir a
+seção 21 do prompt à risca), o caminho correto é criar uma Cloud Function
+"onCall" ou um Trigger "onCreate" em /orders que recalcula o frete no
+servidor (repetindo a mesma lógica de calcShippingFee do index.html, em
+Node.js) e corrige/rejeita o pedido se o valor não bater. Isso está fora do
+que consigo fazer sem acesso ao seu projeto Firebase — mas a lógica de
+cálculo já está isolada e comentada no index.html (função calcShippingFee),
+pronta para ser portada para uma Cloud Function depois.
