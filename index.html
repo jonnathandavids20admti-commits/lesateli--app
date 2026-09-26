@@ -1732,11 +1732,8 @@
     }, function(err){ console.error('products snapshot error', err); });
   }
   function syncProductToFirestore(p){
-    if(!db) return;
-    db.collection('products').doc(p.id).set(JSON.parse(JSON.stringify(p))).catch(function(err){
-      console.error(err);
-      toast('Produto salvo neste dispositivo, mas não sincronizou com o servidor.', 'error');
-    });
+    if(!db) return Promise.reject(new Error('Sem conexão com o servidor.'));
+    return db.collection('products').doc(p.id).set(JSON.parse(JSON.stringify(p)));
   }
   function deleteProductFromFirestore(id){
     if(!db) return;
@@ -4121,23 +4118,35 @@
         var pid = input.dataset.pid;
         var file = e.target.files && e.target.files[0];
         if(!file) return;
+        var prod = state.products.find(function(x){return x.id===pid;});
+        if(!prod){ input.value=''; return; }
+        var prevPhoto = prod.photo;
         compressImageFile(file).then(function(dataUrl){
-          var prod = state.products.find(function(x){return x.id===pid;});
-          if(!prod) return;
-          var prevPhoto = prod.photo;
-          prod.photo = dataUrl;
+          // Mesmo caminho seguro do formulário completo de produto: a foto sobe pro
+          // Firebase Storage e só o link (bem menor) é gravado no Firestore, em vez de
+          // colocar o base64 inteiro no documento (isso já esbarrou no limite de 1MB
+          // por documento do Firestore antes, e fazia a foto nunca chegar ao servidor).
+          return uploadProductImage(pid, dataUrl, 'photo-'+Date.now()+'.jpg');
+        }).then(function(url){
+          prod.photo = url;
           var result = persistProducts();
           if(!result.ok){
             prod.photo = prevPhoto;
             toast(result.message, 'error');
             return;
           }
-          syncProductToFirestore(prod);
           renderAll();
           openImgManager();
-          toast('Foto de "'+prod.name+'" atualizada', 'success');
+          return syncProductToFirestore(prod).then(function(){
+            toast('Foto de "'+prod.name+'" atualizada', 'success');
+          }, function(){
+            toast('A foto de "'+prod.name+'" foi salva só neste navegador — não sincronizou com o servidor. Verifique sua conexão e tente de novo, ou ela pode se perder.', 'error');
+          });
         }).catch(function(err){
-          toast(err.message || 'Não foi possível processar a imagem', 'error');
+          prod.photo = prevPhoto;
+          toast(err.message || 'Não foi possível enviar esta foto. Tente novamente.', 'error');
+        }).then(function(){
+          input.value = '';
         });
       });
     });
@@ -4155,10 +4164,13 @@
             toast(result.message, 'error');
             return;
           }
-          syncProductToFirestore(prod);
           renderAll();
           openImgManager();
-          toast('Foto removida', 'success');
+          syncProductToFirestore(prod).then(function(){
+            toast('Foto removida', 'success');
+          }, function(){
+            toast('Removida neste navegador, mas não sincronizou com o servidor. Ela pode voltar a aparecer se o cache for limpo.', 'error');
+          });
         });
       });
     });
@@ -4370,8 +4382,11 @@
       renderAll();
       document.getElementById('prodFormOverlay').classList.add('hide');
       if(!document.getElementById('prodListOverlay').classList.contains('hide')) openProdList();
-      toast('Produto salvo com sucesso', 'success');
-      syncProductToFirestore(obj);
+      syncProductToFirestore(obj).then(function(){
+        toast('Produto salvo com sucesso', 'success');
+      }, function(){
+        toast('Produto salvo neste navegador, mas não sincronizou com o servidor. Verifique sua conexão — sem isso, as alterações podem se perder.', 'error');
+      });
     }).catch(function(err){
       console.error(err);
       toast(err.message || 'Não foi possível enviar as fotos deste produto. Tente novamente.', 'error');
