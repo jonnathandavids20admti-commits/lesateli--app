@@ -250,7 +250,8 @@
     cursor:pointer; color:var(--rose-dark);
   }
   .fav-heart svg{width:17px; height:17px;}
-  .fav-heart.active svg{fill:var(--rose-dark);}
+  .fav-heart.active{color:var(--lavender-dark);}
+  .fav-heart.active svg{fill:var(--lavender);}
   .card .body{padding:12px 13px 14px; display:flex; flex-direction:column; gap:4px; flex:1;}
   .card .pname{font-size:13.5px; font-weight:600; color:var(--ink); cursor:pointer; line-height:1.3;}
   .price-row{display:flex; align-items:center; justify-content:space-between; margin-top:auto;}
@@ -1098,6 +1099,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-storage-compat.js"></script>
 <script>
 (function(){
   "use strict";
@@ -1425,7 +1427,7 @@
   function unitPrice(it){ return (Number(it.price)||0) + (Number(it.packagingPrice)||0); }
 
   /* ---------------- FIREBASE ---------------- */
-  var auth = null, db = null;
+  var auth = null, db = null, storage = null;
   var currentUser = null, currentCustomer = null;
   var STATUS_LABELS = {pendente:'Pendente', enviado:'Enviado', concluido:'Concluído'};
 
@@ -1626,6 +1628,7 @@
       auth = firebase.auth();
       try{ auth.languageCode = 'pt-BR'; }catch(e){}
       db = firebase.firestore();
+      try{ storage = firebase.storage(); }catch(e){ console.error('Storage indisponível', e); }
       state.dbAvailable = true;
       applyAdminUI();
       listenSiteContent();
@@ -1827,10 +1830,13 @@
   // Resizes/compresses an uploaded image client-side before storing it, so a handful
   // of product photos don't blow past the browser's localStorage quota (~5-10MB/site).
   function compressImageFile(file, maxDim, quality, forceJpeg){
-    maxDim = maxDim || 800; quality = quality || 0.75;
+    maxDim = maxDim || 1400; quality = quality || 0.85;
     return new Promise(function(resolve, reject){
       if(!file || !file.type || file.type.indexOf('image/') !== 0){
         reject(new Error('Selecione um arquivo de imagem válido')); return;
+      }
+      if(file.size > 15*1024*1024){
+        reject(new Error('Essa imagem tem mais de 15 MB. Escolha uma foto menor.')); return;
       }
       var reader = new FileReader();
       reader.onerror = function(){ reject(new Error('Não foi possível ler o arquivo selecionado')); };
@@ -1857,6 +1863,28 @@
       };
       reader.readAsDataURL(file);
     });
+  }
+
+  // As fotos de produto não ficam mais como base64 dentro do documento do Firestore
+  // (que tem um limite físico de 1 MB por documento — daí o antigo aviso de "1 MB").
+  // Em vez disso, sobem pro Firebase Storage e o Firestore guarda só o link (bem
+  // pequeno), então cada produto pode ter várias fotos bem mais pesadas sem esbarrar
+  // nesse limite.
+  function isDataUrl(s){ return typeof s === 'string' && s.indexOf('data:') === 0; }
+  function dataUrlToBlob(dataUrl){
+    var parts = dataUrl.split(',');
+    var mimeMatch = parts[0].match(/:(.*?);/);
+    var mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    var binary = atob(parts[1]);
+    var arr = new Uint8Array(binary.length);
+    for(var i=0;i<binary.length;i++) arr[i] = binary.charCodeAt(i);
+    return new Blob([arr], {type: mime});
+  }
+  function uploadProductImage(productId, dataUrl, fileName){
+    if(!storage) return Promise.reject(new Error('Envio de imagens indisponível agora (sem conexão com o armazenamento).'));
+    var blob = dataUrlToBlob(dataUrl);
+    var ref = storage.ref().child('products/'+productId+'/'+fileName);
+    return ref.put(blob).then(function(snap){ return snap.ref.getDownloadURL(); });
   }
 
   /* ---------------- RECORTE DE IMAGEM (perfil / sobre nós) ----------------
@@ -2116,8 +2144,15 @@
     var favBtn = e.target.closest('[data-fav]');
     if(!favBtn) return;
     e.stopPropagation();
-    toggleFavorite(favBtn.dataset.fav);
-    favBtn.classList.toggle('active', isFavorite(favBtn.dataset.fav));
+    var id = favBtn.dataset.fav;
+    toggleFavorite(id);
+    // Atualiza TODOS os corações desse produto na página (grade principal, modal do
+    // produto, aba de favoritos etc.) — cada um é um botão diferente no DOM, então
+    // não basta marcar só o que foi clicado, senão eles ficam com estados diferentes.
+    var nowFav = isFavorite(id);
+    document.querySelectorAll('[data-fav="'+id+'"]').forEach(function(btn){
+      btn.classList.toggle('active', nowFav);
+    });
     if(!document.getElementById('favOverlay').classList.contains('hide')) openFavOverlay();
   });
 
@@ -4242,7 +4277,7 @@
     var input = e.target, files = Array.prototype.slice.call(input.files || []);
     var room = 5 - pendingGallery.length;
     if(files.length > room){ toast('A galeria aceita até 5 fotos adicionais.', 'error'); files = files.slice(0, Math.max(room, 0)); }
-    Promise.all(files.map(function(f){ return compressImageFile(f, 800, 0.72, true); })).then(function(list){
+    Promise.all(files.map(function(f){ return compressImageFile(f, 1100, 0.82, true); })).then(function(list){
       pendingGallery = pendingGallery.concat(list); renderGalleryPreview();
     }).catch(function(err){ toast(err.message || 'Não foi possível processar a imagem', 'error'); })
       .finally(function(){ input.value = ''; });
@@ -4258,44 +4293,77 @@
     var models = document.getElementById('pfModels').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
     var lines = document.getElementById('pfLines').value.split(',').map(function(s){return s.trim();}).filter(Boolean);
     var existingProd = editingId ? state.products.find(function(p){return p.id===editingId;}) : null;
-    var obj = {
-      id: editingId || ('p'+Date.now()),
-      name: name,
-      category: document.getElementById('pfCategory').value,
-      price: priceVal,
-      oldPrice: document.getElementById('pfOldPrice').value ? parseFloat(document.getElementById('pfOldPrice').value) : null,
-      badge: document.getElementById('pfBadge').value,
-      icon: document.getElementById('pfIcon').value,
-      available: document.getElementById('pfAvailable').value === '1',
-      color: (colors[0] || '#C17A6F'),
-      desc: document.getElementById('pfDesc').value.trim(),
-      colors: colors.length?colors:['#C17A6F'],
-      sizes: sizes.length?sizes:['Único'],
-      models: models.length?models:['Básico'],
-      lines: lines.length?lines:['Colorida'],
-      photo: pendingPhoto || (existingProd ? existingProd.photo : undefined),
-      gallery: pendingGallery.slice()
-    };
-    if(JSON.stringify(obj).length > 900000){ toast('As fotos deste produto ficaram pesadas demais para o servidor (limite ~1 MB). Remova fotos da galeria ou troque a foto principal por uma mais leve.', 'error'); return; }
-    // snapshot for rollback if persistence fails
-    var prevProducts = state.products.slice();
-    if(editingId){
-      var idx = state.products.findIndex(function(p){return p.id===editingId;});
-      if(idx>-1) state.products[idx] = obj;
-    } else {
-      state.products.push(obj);
-    }
-    var result = persistProducts();
-    if(!result.ok){
-      state.products = prevProducts; // rollback so UI never shows unsaved data as saved
-      toast(result.message, 'error');
-      return;
-    }
-    renderAll();
-    document.getElementById('prodFormOverlay').classList.add('hide');
-    if(!document.getElementById('prodListOverlay').classList.contains('hide')) openProdList();
-    toast('Produto salvo com sucesso', 'success');
-    syncProductToFirestore(obj);
+    var productId = editingId || ('p'+Date.now());
+
+    // pendingPhoto/pendingGallery guardam "data:" (foto nova, ainda só no navegador)
+    // ou um link já enviado antes — só as novas precisam ser enviadas ao Storage agora.
+    var newPhoto = isDataUrl(pendingPhoto) ? pendingPhoto : null;
+    var newGalleryItems = pendingGallery.filter(isDataUrl);
+    var keptGalleryItems = pendingGallery.filter(function(s){ return !isDataUrl(s); });
+
+    var saveBtn = this;
+    saveBtn.disabled = true;
+    var saveBtnOriginalText = saveBtn.textContent;
+    saveBtn.textContent = (newPhoto || newGalleryItems.length) ? 'Enviando fotos...' : 'Salvando...';
+
+    var photoUpload = newPhoto
+      ? uploadProductImage(productId, newPhoto, 'photo-'+Date.now()+'.jpg')
+      : Promise.resolve(pendingPhoto || (existingProd ? existingProd.photo : undefined));
+    var galleryUpload = Promise.all(newGalleryItems.map(function(dataUrl, i){
+      return uploadProductImage(productId, dataUrl, 'gallery-'+Date.now()+'-'+i+'.jpg');
+    }));
+
+    Promise.all([photoUpload, galleryUpload]).then(function(results){
+      var obj = {
+        id: productId,
+        name: name,
+        category: document.getElementById('pfCategory').value,
+        price: priceVal,
+        oldPrice: document.getElementById('pfOldPrice').value ? parseFloat(document.getElementById('pfOldPrice').value) : null,
+        badge: document.getElementById('pfBadge').value,
+        icon: document.getElementById('pfIcon').value,
+        available: document.getElementById('pfAvailable').value === '1',
+        color: (colors[0] || '#C17A6F'),
+        desc: document.getElementById('pfDesc').value.trim(),
+        colors: colors.length?colors:['#C17A6F'],
+        sizes: sizes.length?sizes:['Único'],
+        models: models.length?models:['Básico'],
+        lines: lines.length?lines:['Colorida'],
+        photo: results[0],
+        gallery: keptGalleryItems.concat(results[1])
+      };
+      // Rede de segurança: com as fotos como links, isso não deve mais acontecer,
+      // mas evita gravar algo maior que o Firestore aceita em caso de imprevisto.
+      if(JSON.stringify(obj).length > 900000){
+        toast('Algo deixou os dados deste produto pesados demais para salvar. Tente novamente com menos fotos.', 'error');
+        return;
+      }
+      // snapshot for rollback if persistence fails
+      var prevProducts = state.products.slice();
+      if(editingId){
+        var idx = state.products.findIndex(function(p){return p.id===editingId;});
+        if(idx>-1) state.products[idx] = obj;
+      } else {
+        state.products.push(obj);
+      }
+      var result = persistProducts();
+      if(!result.ok){
+        state.products = prevProducts; // rollback so UI never shows unsaved data as saved
+        toast(result.message, 'error');
+        return;
+      }
+      renderAll();
+      document.getElementById('prodFormOverlay').classList.add('hide');
+      if(!document.getElementById('prodListOverlay').classList.contains('hide')) openProdList();
+      toast('Produto salvo com sucesso', 'success');
+      syncProductToFirestore(obj);
+    }).catch(function(err){
+      console.error(err);
+      toast(err.message || 'Não foi possível enviar as fotos deste produto. Tente novamente.', 'error');
+    }).then(function(){
+      saveBtn.disabled = false;
+      saveBtn.textContent = saveBtnOriginalText;
+    });
   });
 
   function persistProducts(){
