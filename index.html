@@ -207,9 +207,9 @@
 
   /* ---------- product grid ---------- */
   .grid{
-    display:grid; grid-template-columns:repeat(5, 1fr); gap:18px;
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:18px;
   }
-  .grid.offers{grid-template-columns:repeat(4, 1fr);}
+  .grid.offers{grid-template-columns:repeat(auto-fill, minmax(230px, 1fr));}
   .card{
     background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden;
     display:flex; flex-direction:column;
@@ -495,7 +495,6 @@
   .top-row{display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px;}
   .top-row .tn{flex:1; min-width:0;} .top-row .tb{height:6px; border-radius:3px; background:var(--rose-dark); margin-top:4px;}
   @media(max-width:980px){
-    .grid, .grid.offers{grid-template-columns:repeat(2,1fr);}
     .hero-inner{grid-template-columns:1fr;}
     .about-inner{grid-template-columns:1fr;}
     nav.main{gap:18px;}
@@ -503,7 +502,7 @@
     .pd-image{border-radius:20px 20px 0 0;}
   }
   @media(max-width:520px){
-    .grid, .grid.offers{grid-template-columns:repeat(2,1fr);}
+    .grid, .grid.offers{grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));}
     .header-inner{
       padding:12px 16px; row-gap:10px;
       grid-template-columns:auto 1fr auto; grid-template-areas:"menu logo right" "nav nav nav";
@@ -1465,26 +1464,63 @@
   }
 
   function metaRef(){ return db.collection('meta').doc('counters'); }
+  // Subcoleção onde ficam os dados sensíveis do pedido (nome, telefone, endereço,
+  // e-mail). O documento principal do pedido (orders/{id}) só guarda o que é seguro
+  // expor publicamente: itens, valores, status. Ver firestore.rules.
+  function orderPrivateRef(orderId){ return db.collection('orders').doc(orderId).collection('private').doc('details'); }
+
+  // Busca e mistura no objeto do pedido os dados privados (endereço/telefone/e-mail),
+  // usada pelo admin e por quem já é dono do pedido (regras do Firestore garantem isso).
+  function attachOrderPrivate(order){
+    return orderPrivateRef(order.id).get().then(function(snap){
+      if(snap.exists){
+        var p = snap.data();
+        order.customer = p.customer || {};
+        order.customerEmail = p.customerEmail || '';
+      }
+      return order;
+    }).catch(function(){ return order; });
+  }
 
   // Cria o pedido com numeração sequencial real (via transação) — status inicial:
   // pagamento pendente, produção "aguardando confirmação". A decisão de ir para
   // produção ou para a fila só acontece quando o pagamento for confirmado (função approvePayment).
+  // Os dados sensíveis do cliente (nome/telefone/endereço/e-mail) vão para uma
+  // subcoleção protegida (orders/{id}/private/details); o documento público do
+  // pedido só guarda o necessário para o link de status e para o admin/dono lerem
+  // depois (ver attachOrderPrivate).
   function createOrder(payload){
     var orderRef = db.collection('orders').doc();
     return db.runTransaction(function(tx){
       return tx.get(metaRef()).then(function(snap){
         var seq = (snap.exists && snap.data().orderSeq) || 0;
         seq += 1;
-        var data = Object.assign({}, payload, {
+        var customer = payload.customer || {};
+        var phoneDigits = String(customer.phone || '').replace(/\D/g,'');
+        var publicPayload = Object.assign({}, payload);
+        delete publicPayload.customer;
+        delete publicPayload.customerEmail;
+        var data = Object.assign({}, publicPayload, {
           orderNumber: seq,
+          firstName: customer.name ? customer.name.split(' ')[0] : '',
+          phoneLast4: phoneDigits.slice(-4),
           paymentStatus: 'pendente',
           productionStatus: 'aguardando_confirmacao',
           timeline: [{stage:'aguardando_confirmacao', atMs: Date.now()}],
           createdAtMs: Date.now()
         });
+        var privateData = {
+          uid: payload.uid,
+          customer: customer,
+          customerEmail: payload.customerEmail || ''
+        };
         tx.set(metaRef(), {orderSeq: seq}, {merge:true});
         tx.set(orderRef, data);
-        return {id: orderRef.id, data: data};
+        tx.set(orderPrivateRef(orderRef.id), privateData);
+        // "data" devolvido aqui já inclui customer/customerEmail (em memória, não é
+        // o que foi salvo no documento público) — assim a mensagem de WhatsApp logo
+        // após o checkout continua funcionando sem precisar reler o banco.
+        return {id: orderRef.id, data: Object.assign({}, data, {customer: customer, customerEmail: payload.customerEmail || ''})};
       });
     });
   }
@@ -2099,18 +2135,19 @@
   function renderPublicOrder(o){
     var itemsTxt = (o.items||[]).map(function(it){ return it.qty+'x '+it.name; }).join(', ');
     var orderNo = o.orderNumber ? '#'+String(o.orderNumber).padStart(6,'0') : '';
-    var first = (o.customer && o.customer.name) ? o.customer.name.split(' ')[0] : '';
+    var first = o.firstName || '';
     document.getElementById('publicOrderBody').innerHTML =
-      '<div style="font-size:13px;color:var(--ink-soft);">'+(first?'Olá, '+first+'! ':'')+'Pedido '+orderNo+'</div>'
+      '<div style="font-size:13px;color:var(--ink-soft);">'+(first?'Olá, '+esc(first)+'! ':'')+'Pedido '+orderNo+'</div>'
       +'<div style="font-size:13.5px;margin-top:8px;">'+esc(itemsTxt)+'</div>'
       +'<div style="font-weight:600;margin-top:8px;color:'+statusColor(o.productionStatus)+';">'+(PRODUCTION_LABELS[o.productionStatus]||o.productionStatus)+'</div>'
       +renderTimeline(o);
   }
   // Só busca o pedido no banco depois que o visitante confirmar os 4 últimos dígitos do
   // telefone usado na compra — assim, quem só encontrou/adivinhou o link não vê nada sozinho.
-  // IMPORTANTE: essa checagem roda no navegador, então ela reforça a privacidade pra quem usa
-  // o link normalmente, mas a proteção "de verdade" continua sendo a regra do Firestore que
-  // permite ler UM pedido por ID exato, sem permitir listar todos.
+  // O documento público do pedido (orders/{id}) já vem SEM dados sensíveis (nome completo,
+  // telefone, endereço) — só guarda "firstName" e "phoneLast4" para essa própria checagem.
+  // Os dados completos ficam numa subcoleção protegida (orders/{id}/private/details),
+  // que só admin ou o próprio dono do pedido conseguem ler (ver firestore.rules).
   function resetPublicOrderForm(){
     document.getElementById('publicOrderBody').innerHTML =
       '<p style="color:var(--ink-soft);font-size:13px;margin-top:0;">Pra sua segurança, digite os 4 últimos números do telefone usado no pedido:</p>'
@@ -2130,8 +2167,7 @@
         db.collection('orders').doc(orderId).get().then(function(snap){
           if(!snap.exists){ errEl.textContent = 'Pedido não encontrado.'; return; }
           var o = normalizeOrder(Object.assign({id:orderId}, snap.data()));
-          var phoneDigits = String((o.customer && o.customer.phone) || '').replace(/\D/g,'');
-          if(!phoneDigits || phoneDigits.slice(-4) !== digits){ errEl.textContent = 'Os números não conferem. Confira o link recebido.'; return; }
+          if(!o.phoneLast4 || o.phoneLast4 !== digits){ errEl.textContent = 'Os números não conferem. Confira o link recebido.'; return; }
           renderPublicOrder(o);
         }).catch(function(){ errEl.textContent = 'Não foi possível carregar este pedido agora.'; });
       };
@@ -3309,6 +3345,11 @@
       var snap=res[0], mSnap=res[1];
       var orders = [];
       snap.forEach(function(doc){ orders.push(normalizeOrder(Object.assign({id:doc.id}, doc.data()))); });
+      // busca os dados privados (nome/telefone/endereço) de cada pedido antes de exibir/
+      // usar a lista — eles não vêm mais no documento público do pedido.
+      return Promise.all(orders.map(attachOrderPrivate)).then(function(){ return {orders: orders, mSnap: mSnap}; });
+    }).then(function(res){
+      var orders = res.orders, mSnap = res.mSnap;
       orders.sort(function(a,b){ return (b.createdAtMs||0)-(a.createdAtMs||0); });
       // pedidos pagos no cartão (aprovados pelo Mercado Pago) entram em produção/fila automaticamente
       var toApprove = orders.filter(function(o){ return o.mpStatus==='approved' && o.paymentStatus==='pendente' && o.productionStatus!=='cancelado'; });
@@ -3370,7 +3411,9 @@
   // Busca o pedido já atualizado no banco e abre o WhatsApp do cliente com o aviso pronto.
   function notifyFreshOrder(orderId){
     db.collection('orders').doc(orderId).get().then(function(snap){
-      if(snap.exists) notifyCustomerStatus(normalizeOrder(Object.assign({id:orderId}, snap.data())));
+      if(!snap.exists) return;
+      var order = normalizeOrder(Object.assign({id:orderId}, snap.data()));
+      return attachOrderPrivate(order).then(function(o){ notifyCustomerStatus(o); });
     }).catch(function(){ /* se falhar, só não abre o WhatsApp — o status já foi salvo normalmente */ });
   }
   document.getElementById('adminOrdersBody').addEventListener('click', function(e){
