@@ -1,0 +1,12 @@
+{
+  "name": "lesatelie-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API REST do LesAteliê (Netlify Functions + Express + Firestore)",
+  "scripts": { "test": "node --test" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "firebase-admin": "^12.6.0",
+    "serverless-http": "^3.2.0"
+  }
+}
