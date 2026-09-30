@@ -1,0 +1,17 @@
+const { getAdmin } = require('./firebase');
+const { HttpError } = require('./errors');
+const ADMIN_EMAIL = () => process.env.ADMIN_EMAIL || 'admin@lesatelie.com';
+
+async function requireAdmin(req, _res, next) {
+  try {
+    const m = /^Bearer (.+)$/.exec(req.headers.authorization || '');
+    if (!m) throw new HttpError(401, 'Faça login como administrador para continuar.');
+    let decoded;
+    try { decoded = await getAdmin().auth().verifyIdToken(m[1]); }
+    catch { throw new HttpError(401, 'Sessão inválida ou expirada. Entre novamente.'); }
+    if (decoded.email !== ADMIN_EMAIL()) throw new HttpError(403, 'Você não tem permissão para esta ação.');
+    req.user = decoded;
+    next();
+  } catch (e) { next(e); }
+}
+module.exports = { requireAdmin };
