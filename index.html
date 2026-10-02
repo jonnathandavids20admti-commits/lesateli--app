@@ -935,6 +935,60 @@
   }
   @media (max-width:520px){.ad-kpis{gap:10px;}.ad-kpi{padding:14px;}.ad-kpi b{font-size:24px;}.ad-hello h2{font-size:24px;}}
 </style>
+
+<style id="tour-css">
+html.tour-on,html.tour-on *{scroll-behavior:auto!important}
+#tourBlock{position:fixed;inset:0;z-index:300;touch-action:none}
+#tourSvg{position:fixed;left:0;top:0;width:100%;height:100%;z-index:301;pointer-events:none;opacity:0;transition:opacity .3s ease}
+#tourSvg.on{opacity:1}
+#tourDim{fill:rgba(35,26,23,.58);fill-rule:evenodd}
+#tourRing{fill:none;stroke:var(--rose);stroke-width:3}
+#tourTip{position:fixed;left:0;top:0;z-index:302;width:360px;max-width:calc(100vw - 20px);box-sizing:border-box;
+  background:var(--card);color:var(--ink);border:1px solid var(--rose-pale);border-radius:22px;padding:20px 20px 16px;
+  box-shadow:0 20px 50px rgba(50,30,24,.30),0 2px 8px rgba(50,30,24,.10);font-family:var(--font-body);
+  opacity:0;will-change:transform,opacity;transform:translate3d(0,0,0);
+  transition:transform .42s cubic-bezier(.215,.61,.355,1),opacity .25s ease}
+#tourTip.on{opacity:1}
+#tourTip.nt{transition:opacity .25s ease}
+#tourTip .tt-body{transition:opacity .16s ease,transform .16s ease}
+#tourTip.swap .tt-body{opacity:0;transform:translateY(6px)}
+#tourTip .tt-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+#tourTip .tt-ico{flex:none;width:44px;height:44px;border-radius:50%;background:var(--rose-pale);display:flex;align-items:center;justify-content:center;font-size:22px}
+#tourTip .tt-n{font-size:12px;color:var(--ink-soft);margin-bottom:2px}
+#tourTip h4{font-family:var(--font-display);font-size:20px;line-height:1.2;font-weight:600;margin:0}
+#tourTip p{font-size:14.5px;line-height:1.6;margin:0 0 12px}
+#tourTip .tt-dica{background:var(--rose-pale);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;margin:0 0 14px}
+#tourTip .tt-dica:empty{display:none}
+#tourTip .tt-bar{height:4px;background:var(--line);border-radius:4px;margin:2px 0 14px;overflow:hidden}
+#tourTip .tt-bar i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:linear-gradient(90deg,var(--rose),var(--rose-dark));border-radius:4px;transition:transform .5s cubic-bezier(.4,0,.2,1)}
+#tourTip .tt-btns{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#tourTip .tt-btns span{display:flex;gap:8px}
+#tourTip button{font:inherit;font-size:14px;font-weight:600;cursor:pointer;border-radius:999px;padding:9px 18px;border:1px solid var(--line);background:var(--card);color:var(--ink);transition:transform .15s ease}
+#tourTip button:active{transform:scale(.96)}
+#tourTip .tt-skip{border:0;background:none;color:var(--ink-soft);padding:9px 6px}
+#tourTip .tt-next{background:linear-gradient(135deg,var(--rose),var(--rose-dark));border-color:var(--rose-dark);color:#fff;padding:9px 22px}
+#tourTip button:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
+/* versão compacta para telefone: ocupa menos tela */
+#tourTip.cp{padding:14px 14px 12px;border-radius:18px}
+#tourTip.cp .tt-head{gap:10px;margin-bottom:6px}
+#tourTip.cp .tt-ico{width:34px;height:34px;font-size:18px}
+#tourTip.cp .tt-n{font-size:11px;margin-bottom:0}
+#tourTip.cp h4{font-size:17px}
+#tourTip.cp p{font-size:13.5px;line-height:1.5;margin:0 0 8px}
+#tourTip.cp .tt-dica{font-size:12px;line-height:1.4;padding:7px 10px;margin:0 0 8px}
+#tourTip.cp .tt-bar{margin:0 0 10px}
+#tourTip.cp button{font-size:13.5px;padding:8px 14px}
+#tourTip.cp .tt-next{padding:8px 18px}
+#tourTip .tt-arrow{position:absolute;width:16px;height:16px;background:var(--card);border:0 solid var(--rose-pale);transform:rotate(45deg);display:none}
+#tourTip .tt-arrow.a-top{display:block;top:-9px;border-width:1px 0 0 1px}
+#tourTip .tt-arrow.a-bottom{display:block;bottom:-9px;border-width:0 1px 1px 0}
+#tourTip .tt-arrow.a-left{display:block;left:-9px;border-width:0 0 1px 1px}
+#tourTip .tt-arrow.a-right{display:block;right:-9px;border-width:1px 1px 0 0}
+@media (prefers-reduced-motion:reduce){
+  #tourSvg,#tourTip,#tourTip .tt-body,#tourTip .tt-bar i{transition:none}
+}
+</style>
+
 </head>
 <body>
 
@@ -5779,5 +5833,413 @@
 
 })();
 </script>
+
+<script id="tour-js">
+(function(){
+  var KC='lesTourCliente2', KA='lesTourAdmin2';
+  function get(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+  function put(k){try{localStorage.setItem(k,'1');}catch(e){}}
+  function $(s){return document.querySelector(s);}
+  function click(s){var e=$(s); if(e) e.click();}
+  function isHidden(id){var e=document.getElementById(id); return !e || e.classList.contains('hide');}
+  function curView(){var r='home'; ['home','about','products','contact','admin'].forEach(function(v){ if(!isHidden('view-'+v)) r=v; }); return r;}
+  function curTab(){var b=$('#adminNav button.active'); return b?b.dataset.adminTab:'';}
+  function nav(v){return 'nav.main button[data-view="'+v+'"]';}
+  function adm(t){return '#adminNav button[data-admin-tab="'+t+'"]';}
+  var PANEL='.admin-panel:not(.hide)';
+
+  /* ---------- roteiro do cliente ---------- */
+  var C=[
+    {e:'👋',t:'Bem-vindo(a) ao LesAteliê!',v:'home',
+     x:'Este é um passeio rápido de 1 minuto. Vou mostrar, passo a passo, onde fica o catálogo, onde fica cada menu e como fazer a sua compra.',
+     d:'Toque em “Próximo” para avançar. Se preferir explorar sozinho(a), toque em “Pular”.'},
+    {e:'🧭',t:'O menu principal',v:'home',s:['nav.main'],
+     x:'Estes botões são o mapa do site. “Início” é a vitrine, “Sobre nós” conta a nossa história, “Produtos” é o catálogo completo e “Contatos” mostra como falar com a gente.'},
+    {e:'🔍',t:'Procurando algo?',v:'home',s:['#searchBtn'],
+     x:'Toque na lupa e digite o nome da peça que você quer. Os resultados aparecem enquanto você escreve, sem precisar navegar pelo catálogo.'},
+    {e:'⭐',t:'Produtos em destaque',v:'home',s:['#view-home .section-head','#offersGrid'],
+     x:'Na página inicial ficam as peças em destaque, para você dar uma primeira olhada. Para ver todas, toque em “Ver todos”.'},
+    {e:'🧸',t:'Aqui fica o catálogo',v:'home',s:[nav('products')],
+     x:'O botão “Produtos” abre o catálogo, com todas as peças da loja. Vamos entrar nele agora.'},
+    {e:'🧶',t:'Filtre por categoria',v:'products',s:['#filterBar','.products-head'],
+     x:'Quer ver só um tipo de peça? Toque em uma destas opções e o catálogo mostra apenas aquela categoria.'},
+    {e:'👆',t:'Escolha a sua peça',v:'products',s:['#productsGrid .card','#productsGrid'],
+     x:'Cada quadro é uma peça. Toque nela para abrir os detalhes: fotos, descrição, preço e opções. É lá que fica o botão “Adicionar ao carrinho”.',
+     d:'Você pode adicionar quantas peças quiser antes de pagar.'},
+    {e:'🛒',t:'O seu carrinho',v:'products',s:['#cartBtn'],
+     x:'Tudo que você adiciona vai para o carrinho. O número em cima do ícone mostra quantas peças você já separou. Toque aqui para abrir.'},
+    {e:'📋',t:'Conferindo o pedido',v:'products',c:1,s:['#cartOverlay .panel'],
+     x:'Este é o seu carrinho. Aqui você confere as peças escolhidas, muda a quantidade e remove o que não quiser. Abaixo da lista ficam as opções de entrega e pagamento.',
+     d:'Com o carrinho vazio, essas opções só aparecem depois que você adicionar uma peça.'},
+    {e:'🚚',t:'Como você quer receber?',v:'products',c:1,s:['#cartSummary .delivery-opts','#cartOverlay .panel'],
+     x:'Escolha “Entrega” para receber em casa ou “Retirada” para buscar. Na entrega, digite o seu CEP logo abaixo e toque em “Calcular” para saber o valor do frete.'},
+    {e:'🏷️',t:'Tem um cupom?',v:'products',c:1,s:['#couponInput','#cartOverlay .panel'],
+     x:'Se você recebeu um código de desconto, digite aqui e toque em “Aplicar”. O desconto aparece no resumo do pedido.'},
+    {e:'🎁',t:'Vai dar de presente?',v:'products',c:1,s:['#cartOverlay .gift-toggle','#cartOverlay .panel'],
+     x:'Marque esta opção para incluir um cartão com mensagem e escreva o recado que vai junto com a peça.'},
+    {e:'💳',t:'Forma de pagamento',v:'products',c:1,s:['#payMethods','#payPixBox','#cartOverlay .panel'],
+     x:'Escolha como pagar. No Pix, você paga pelo aplicativo do seu banco usando a chave que aparece na tela. No cartão, você é levado ao Mercado Pago, um ambiente seguro.'},
+    {e:'✅',t:'Finalizando a compra',v:'products',c:1,s:['#checkoutBtn','#cartOverlay .panel'],
+     x:'Quando estiver tudo certo, toque em “Finalizar compra” e siga as instruções na tela para informar seus dados e confirmar o pedido.'},
+    {e:'☰',t:'O menu lateral',v:'products',m:1,s:['#sideMenu'],
+     x:'Neste menu ficam a sua conta, os seus pedidos, os favoritos, a troca entre tema claro e escuro e a opção de instalar o app no celular.',
+     d:'Para rever este passeio, toque em “Como usar o site” aqui.'},
+    {e:'💬',t:'Ficou com alguma dúvida?',v:'home',s:[nav('contact')],
+     x:'Em “Contatos” você encontra as formas de falar com a gente. Será um prazer ajudar!'},
+    {e:'🎉',t:'Tudo pronto!',v:'home',
+     x:'Agora você já sabe onde fica cada coisa. Boas compras e aproveite o LesAteliê!'}
+  ];
+
+  /* ---------- roteiro do administrador ---------- */
+  var A=[
+    {e:'👋',t:'Bem-vindo(a) ao painel!',tab:'overview',s:['#adSide','#adMenuBtn'],
+     x:'Este é o painel da sua loja. Vou mostrar para que serve cada parte, para você nunca ficar na dúvida. As seções ficam neste menu (no celular, toque no botão de menu do painel para abri-lo).'},
+    {e:'🏠',t:'Visão geral',tab:'overview',s:[adm('overview'),PANEL],
+     x:'É a tela inicial do painel. Mostra o resumo da loja e botões de atalho para as tarefas mais comuns, como ver pedidos e criar cupom.'},
+    {e:'📦',t:'Pedidos',tab:'orders',s:[adm('orders'),PANEL],
+     x:'Aqui chegam os pedidos dos clientes. Abra um pedido para ver o que foi comprado e os dados de entrega, e use os botões do pedido para atualizar a situação dele.'},
+    {e:'🧸',t:'Produtos',tab:'products',s:[adm('products'),PANEL],
+     x:'Aqui você cadastra as peças da loja. Adicione um produto novo e edite nome, preço e descrição dos que já existem.'},
+    {e:'📈',t:'Vendas',tab:'sales',s:[adm('sales'),PANEL],
+     x:'Acompanhe como a loja está vendendo. É um bom lugar para descobrir quais peças saem mais e quanto entrou em cada período.'},
+    {e:'🖼️',t:'Catálogo e fotos',tab:'images',s:[adm('images'),PANEL],
+     x:'Aqui você troca as imagens do site, como os banners da página inicial e do “Sobre nós”, e as fotos do catálogo.'},
+    {e:'🚚',t:'Entregas',tab:'shipping',s:[adm('shipping'),PANEL],
+     x:'Defina quanto cobrar de frete. Escolha cobrar por distância, por município ou por bairro e preencha os valores. O cliente vê o frete calculado no carrinho.'},
+    {e:'🎁',t:'Embalagens e cartão',tab:'packaging',s:[adm('packaging'),PANEL],
+     x:'Configure o cartão com mensagem que o cliente pode incluir no carrinho. Marque a opção para oferecer e informe o valor (use 0 para ser grátis). Depois toque em salvar.'},
+    {e:'🏷️',t:'Cupons e promoções',tab:'coupons',s:[adm('coupons'),PANEL],
+     x:'Crie códigos de desconto para o cliente digitar no carrinho, informando o código e a porcentagem. Também há o desconto automático para quem nunca comprou na loja.'},
+    {e:'✏️',t:'Conteúdo do site',tab:'texts',s:[adm('texts'),PANEL],
+     x:'Para mudar os textos do site, abra a página, clique no texto em destaque, escreva e saia do campo. Ele salva sozinho. Os botões desta tela levam direto às páginas.'},
+    {e:'🔒',t:'Sair do modo administrador',s:['#btnAdminLogout'],
+     x:'Quando terminar, toque aqui para sair. Faça isso sempre que usar um aparelho que outras pessoas também usam.'},
+    {e:'🎉',t:'Tudo pronto!',tab:'overview',
+     x:'Agora você conhece o painel. Para rever este passeio, toque em “Tutorial do admin”, no topo da página.'}
+  ];
+
+  var NS='http://www.w3.org/2000/svg';
+  var el={}, steps, key, i=0, cur=null, curE=null, active=false, tok=0, poll=0, shown=false,
+      lay=null, lastR=null, raf=0, rzf=0, geo={x:0,y:0,w:0,h:0,o:0},
+      reduced=!!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  function usable(e){
+    if(!e) return false;
+    var r=e.getBoundingClientRect();
+    return r.width>2 && r.height>2 && r.right>0 && r.left<innerWidth;
+  }
+  function target(s){
+    var l=s.s||[];
+    for(var k=0;k<l.length;k++){var e=$(l[k]); if(usable(e)) return e;}
+    return null;
+  }
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  function safeB(){ return el.probe?(parseFloat(getComputedStyle(el.probe).paddingBottom)||0):0; }
+  function headerBottom(){
+    var h=$('header.site'); if(!h) return 0;
+    var p=getComputedStyle(h).position;
+    if(p!=='fixed' && p!=='sticky') return 0;
+    return Math.max(0,h.getBoundingClientRect().bottom);
+  }
+
+  function apply(s){
+    var changed=false;
+    var cartOpen=!isHidden('cartOverlay');
+    var menuOpen=!!($('#sideMenuOverlay.open'));
+    if(!s.c && cartOpen){ click('#cartClose'); changed=true; }
+    if(!s.m && menuOpen){ click('#sideMenuClose'); changed=true; }
+    if(s.v && curView()!==s.v){ click(nav(s.v)); changed=true; }
+    if(s.tab && curTab()!==s.tab){ click(adm(s.tab)); changed=true; }
+    if(s.c && !cartOpen){ click('#cartBtn'); changed=true; }
+    if(s.m && !menuOpen){ click('#menuBtn'); changed=true; }
+    return changed;
+  }
+
+  /* ---------- construção ---------- */
+  function build(){
+    el.block=document.createElement('div'); el.block.id='tourBlock';
+    el.svg=document.createElementNS(NS,'svg'); el.svg.id='tourSvg';
+    el.dim=document.createElementNS(NS,'path'); el.dim.id='tourDim';
+    el.ring=document.createElementNS(NS,'rect'); el.ring.id='tourRing';
+    el.svg.appendChild(el.dim); el.svg.appendChild(el.ring);
+    el.probe=document.createElement('div');
+    el.probe.style.cssText='position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)';
+    el.tip=document.createElement('div'); el.tip.id='tourTip'; el.tip.className='swap';
+    el.tip.setAttribute('role','dialog'); el.tip.setAttribute('aria-live','polite');
+    el.tip.innerHTML='<div class="tt-arrow"></div><div class="tt-body">'+
+      '<div class="tt-head"><div class="tt-ico"></div><div><div class="tt-n"></div><h4></h4></div></div>'+
+      '<p class="tt-x"></p><div class="tt-dica"></div></div>'+
+      '<div class="tt-bar"><i></i></div>'+
+      '<div class="tt-btns"><button type="button" class="tt-skip">Pular</button><span><button type="button" class="tt-prev">Voltar</button><button type="button" class="tt-next">Próximo</button></span></div>';
+    document.body.appendChild(el.block); document.body.appendChild(el.svg);
+    document.body.appendChild(el.probe); document.body.appendChild(el.tip);
+    el.arrow=el.tip.querySelector('.tt-arrow');
+    el.tip.querySelector('.tt-skip').onclick=finish;
+    el.tip.querySelector('.tt-prev').onclick=function(){ if(i>0) go(i-1); };
+    el.tip.querySelector('.tt-next').onclick=function(){ if(i>=steps.length-1) finish(); else go(i+1); };
+    geo={x:innerWidth/2,y:innerHeight/2,w:0,h:0,o:0}; draw(geo);
+    requestAnimationFrame(function(){ el.svg.classList.add('on'); });
+  }
+
+  /* ---------- desenho do destaque (SVG: só repinta, sem recalcular layout) ---------- */
+  function rr(x,y,w,h,r){
+    return 'M'+(x+r)+' '+y+'H'+(x+w-r)+'A'+r+' '+r+' 0 0 1 '+(x+w)+' '+(y+r)+'V'+(y+h-r)+
+      'A'+r+' '+r+' 0 0 1 '+(x+w-r)+' '+(y+h)+'H'+(x+r)+'A'+r+' '+r+' 0 0 1 '+x+' '+(y+h-r)+
+      'V'+(y+r)+'A'+r+' '+r+' 0 0 1 '+(x+r)+' '+y+'Z';
+  }
+  function draw(g){
+    var B=4000, d='M'+(-B)+' '+(-B)+'H'+(innerWidth+B)+'V'+(innerHeight+B)+'H'+(-B)+'Z';
+    if(g.w>1 && g.h>1){
+      var r=Math.min(16,g.w/2,g.h/2);
+      d+=rr(g.x,g.y,g.w,g.h,r);
+      el.ring.setAttribute('x',g.x); el.ring.setAttribute('y',g.y);
+      el.ring.setAttribute('width',g.w); el.ring.setAttribute('height',g.h);
+      el.ring.setAttribute('rx',r); el.ring.setAttribute('opacity',g.o);
+    } else el.ring.setAttribute('opacity',0);
+    el.dim.setAttribute('d',d);
+  }
+  function moveSpot(to,instant){
+    cancelAnimationFrame(raf);
+    var from={x:geo.x,y:geo.y,w:geo.w,h:geo.h,o:geo.o};
+    if(!to) to={x:innerWidth/2,y:innerHeight/2,w:0,h:0,o:0}; else to.o=1;
+    if(from.w<2 && to.w>0) from={x:to.x+to.w/2,y:to.y+to.h/2,w:0,h:0,o:0};
+    if(instant||reduced){ geo=to; draw(geo); return; }
+    var t0=performance.now(), D=420;
+    (function f(t){
+      var p=clamp((t-t0)/D,0,1), k=1-Math.pow(1-p,3);
+      geo={x:from.x+(to.x-from.x)*k, y:from.y+(to.y-from.y)*k, w:from.w+(to.w-from.w)*k, h:from.h+(to.h-from.h)*k, o:from.o+(to.o-from.o)*k};
+      draw(geo);
+      if(p<1) raf=requestAnimationFrame(f);
+    })(t0);
+  }
+
+  /* ---------- rolagem: leva o alvo para a parte da tela que o cartão NÃO cobre ---------- */
+  function scrollers(e){
+    var list=[], fixed=false, n=e.parentElement, cs;
+    while(n && n!==document.body && n!==document.documentElement){
+      cs=getComputedStyle(n);
+      if((cs.overflowY==='auto'||cs.overflowY==='scroll') && n.scrollHeight>n.clientHeight+1) list.push(n);
+      if(cs.position==='fixed'||cs.position==='sticky') fixed=true;
+      n=n.parentElement;
+    }
+    cs=getComputedStyle(e); if(cs.position==='fixed'||cs.position==='sticky') fixed=true;
+    if(!fixed) list.push(window);
+    return list;
+  }
+  function bring(e,z0,z1){
+    var L=scrollers(e);
+    for(var k=0;k<L.length;k++){
+      var s=L[k], a=z0, b=z1;
+      if(s!==window){ var sr=s.getBoundingClientRect(); a=Math.max(a,sr.top+8); b=Math.min(b,sr.bottom-8); if(b-a<40){a=z0;b=z1;} }
+      var r=e.getBoundingClientRect(), h=r.height, d=0;
+      if(h>b-a){ d=r.top-a; }
+      else if(r.top<a || r.bottom>b){ d=(r.top+h/2)-(a+b)/2; }
+      if(Math.abs(d)<2) continue;
+      if(s===window) window.scrollTo(window.pageXOffset,window.pageYOffset+d); else s.scrollTop+=d;
+    }
+  }
+  /* telefone: o cartão fica fixo embaixo (ou em cima) e o alvo é levado para a área livre */
+  function planDock(e,th){
+    var vh=innerHeight, m=10, gap=12, sb=safeB();
+    var L=scrollers(e), win=L.indexOf(window)>-1, hb=win?headerBottom():0;
+    var r=e.getBoundingClientRect();
+    var order=(!L.length && (r.top+r.height/2)>vh/2)?['top','bottom']:['bottom','top'];
+    var best=null;
+    for(var k=0;k<order.length;k++){
+      var d=order[k], z0, z1;
+      if(d==='bottom'){ z0=win?hb+8:0; z1=vh-sb-m-th-gap; }
+      else { z0=m+th+gap; z1=vh; }
+      bring(e,z0,z1);
+      r=e.getBoundingClientRect();
+      var vis=Math.min(r.bottom,z1)-Math.max(r.top,z0), need=Math.min(r.height,z1-z0);
+      var res={dock:d,z0:z0,z1:z1,score:vis};
+      if((r.top>=z0-2 && r.bottom<=z1+2) || vis>=need-2) return res;
+      if(!best || vis>best.score) best=res;
+    }
+    return best;
+  }
+
+  /* ---------- posição do destaque + cartão ---------- */
+  function layout(e,replan){
+    var vw=innerWidth, vh=innerHeight, m=10, gap=14, tip=el.tip, mobile=vw<700, sb=safeB();
+    tip.classList.toggle('cp',vw<600);
+    var tw=Math.min(360,vw-2*m); tip.style.width=tw+'px';
+    var th=tip.offsetHeight;
+    var out={sp:null,x:(vw-tw)/2,y:Math.max(m,(vh-th)/2),ar:null};
+    if(!e) return out;
+    if(mobile){
+      if(replan || !lay) lay=planDock(e,th);
+    } else if(replan){
+      bring(e,headerBottom()+8,vh-8);
+    }
+    var r=e.getBoundingClientRect();
+    var x0=Math.max(r.left-6,4), y0=Math.max(r.top-6,4), x1=Math.min(r.right+6,vw-4), y1=Math.min(r.bottom+6,vh-4);
+    if(mobile && lay){ y0=Math.max(y0,lay.z0-4); y1=Math.min(y1,lay.z1+4); }
+    if(x1-x0<8 || y1-y0<8) return out;   // nada visível: cartão ao centro, sem destaque
+    out.sp={x:x0,y:y0,w:x1-x0,h:y1-y0};
+    var w=x1-x0, h=y1-y0, cx=x0+w/2, cy=y0+h/2;
+    if(mobile && lay){
+      out.x=(vw-tw)/2;
+      out.y=lay.dock==='bottom'?(vh-th-m-sb):m;
+      return out;
+    }
+    var tall=h>vh*0.55;
+    var fits={below:vh-y1>=th+gap+m, above:y0>=th+gap+m, right:vw-x1>=tw+gap+m, left:x0>=tw+gap+m};
+    var pref=tall?['right','left','below','above']:['below','above','right','left'], side=null;
+    for(var k=0;k<pref.length;k++){ if(fits[pref[k]]){ side=pref[k]; break; } }
+    if(side==='below'){ out.y=y1+gap; out.x=clamp(cx-tw/2,m,vw-tw-m); out.ar={c:'a-top',p:'left',v:clamp(cx-out.x,26,tw-26)-8}; }
+    else if(side==='above'){ out.y=y0-th-gap; out.x=clamp(cx-tw/2,m,vw-tw-m); out.ar={c:'a-bottom',p:'left',v:clamp(cx-out.x,26,tw-26)-8}; }
+    else if(side==='right'){ out.x=x1+gap; out.y=clamp(cy-th/2,m,vh-th-m); out.ar={c:'a-left',p:'top',v:clamp(cy-out.y,26,th-26)-8}; }
+    else if(side==='left'){ out.x=x0-tw-gap; out.y=clamp(cy-th/2,m,vh-th-m); out.ar={c:'a-right',p:'top',v:clamp(cy-out.y,26,th-26)-8}; }
+    else { out.x=cx<vw/2?vw-tw-m:m; out.y=cy<vh/2?vh-th-m:m; }   // sem espaço: canto oposto ao alvo
+    return out;
+  }
+  function commit(out,instant){
+    var tip=el.tip, ar=el.arrow;
+    moveSpot(out.sp,instant);
+    if(instant) tip.classList.add('nt');
+    tip.style.transform='translate3d('+Math.round(out.x)+'px,'+Math.round(out.y)+'px,0)';
+    ar.className='tt-arrow'; ar.style.left=ar.style.top='';
+    if(out.ar){ ar.className='tt-arrow '+out.ar.c; ar.style[out.ar.p]=out.ar.v+'px'; }
+    tip.classList.add('on');
+    if(instant) requestAnimationFrame(function(){ requestAnimationFrame(function(){ tip.classList.remove('nt'); }); });
+  }
+  function snap(e){ var r=e.getBoundingClientRect(); return [r.top,r.left,r.width,r.height]; }
+
+  /* espera o alvo existir e parar de se mexer (troca de tela, imagens, menus deslizando) */
+  function waitTarget(s,max,cb){
+    if(!s.s||!s.s.length) return cb(null);
+    var t0=performance.now();
+    (function tick(){
+      if(!active) return;
+      var ready=usable($(s.s[0])), e=target(s);
+      if(max<=0 || ready || performance.now()-t0>=max) return cb(e);
+      requestAnimationFrame(tick);
+    })();
+  }
+  function settle(e,cb){
+    if(!e) return cb();
+    var last='', same=0, t0=performance.now();
+    (function tick(){
+      if(!active) return;
+      var sig=snap(e).map(Math.round).join();
+      if(sig===last) same++; else same=0; last=sig;
+      if(same>=3 || performance.now()-t0>700) return cb();
+      requestAnimationFrame(tick);
+    })();
+  }
+
+  function fill(){
+    var t=el.tip;
+    t.querySelector('.tt-ico').textContent=cur.e||'✨';
+    t.querySelector('.tt-n').textContent='Passo '+(i+1)+' de '+steps.length;
+    t.querySelector('h4').textContent=cur.t;
+    t.querySelector('.tt-x').textContent=cur.x;
+    var d=t.querySelector('.tt-dica'); d.textContent=cur.d?('💡 '+cur.d):'';
+    t.querySelector('.tt-bar i').style.transform='scaleX('+((i+1)/steps.length)+')';
+    t.querySelector('.tt-prev').style.visibility=i===0?'hidden':'visible';
+    t.querySelector('.tt-skip').style.visibility=i===steps.length-1?'hidden':'visible';
+    t.querySelector('.tt-next').textContent=i===steps.length-1?'Concluir':(i===0?'Começar':'Próximo');
+  }
+
+  function go(n){
+    var my=++tok;
+    el.tip.classList.add('swap');
+    setTimeout(function(){
+      if(my!==tok||!active) return;
+      i=n; cur=steps[i]; lay=null;
+      var changed=apply(cur);
+      fill();
+      setTimeout(function(){
+        if(my!==tok||!active) return;
+        waitTarget(cur,changed?900:250,function(e){
+          if(my!==tok||!active) return;
+          settle(e,function(){
+            if(my!==tok||!active) return;
+            curE=e;
+            commit(layout(e,true),!shown);
+            shown=true; lastR=e?snap(e):null;
+            el.tip.classList.remove('swap');
+            el.tip.querySelector('.tt-next').focus({preventScroll:true});
+          });
+        });
+      },changed?330:20);
+    },shown?160:0);
+  }
+
+  /* acompanha mudanças de layout (imagens carregando, teclado, barra do navegador) sem gastar bateria */
+  function watch(){
+    if(!active||!cur||!curE||el.tip.classList.contains('swap')) return;
+    if(!document.body.contains(curE)){ curE=target(cur); if(!curE) return; }
+    var s=snap(curE), o=lastR||s;
+    if(Math.abs(s[0]-o[0])>2||Math.abs(s[1]-o[1])>2||Math.abs(s[2]-o[2])>2||Math.abs(s[3]-o[3])>2){
+      lastR=s; commit(layout(curE,false),true);
+    }
+  }
+  function onResize(){
+    if(rzf) return;
+    rzf=requestAnimationFrame(function(){
+      rzf=0;
+      if(!active||!cur||el.tip.classList.contains('swap')) return;
+      lay=null; curE=target(cur)||curE;
+      commit(layout(curE,true),true); lastR=curE?snap(curE):null;
+    });
+  }
+  function onKey(e){
+    if(e.key==='Escape') finish();
+    else if(e.key==='ArrowRight'){ if(i<steps.length-1) go(i+1); }
+    else if(e.key==='ArrowLeft'){ if(i>0) go(i-1); }
+  }
+
+  function finish(){
+    if(!active) return;
+    active=false; tok++; clearInterval(poll); cancelAnimationFrame(raf); put(key);
+    if(!isHidden('cartOverlay')) click('#cartClose');
+    if($('#sideMenuOverlay.open')) click('#sideMenuClose');
+    if(steps===C && curView()!=='home') click(nav('home'));
+    el.tip.classList.remove('on'); el.svg.classList.remove('on');
+    var nodes=[el.block,el.svg,el.tip,el.probe];
+    setTimeout(function(){ nodes.forEach(function(n){ if(n&&n.parentNode) n.parentNode.removeChild(n); }); document.documentElement.classList.remove('tour-on'); },350);
+    window.removeEventListener('resize',onResize);
+    document.removeEventListener('keydown',onKey);
+  }
+
+  function start(list,k){
+    if(active) return;
+    steps=list; key=k; cur=null; curE=null; i=0; shown=false; active=true; lay=null;
+    document.documentElement.classList.add('tour-on');
+    build();
+    window.addEventListener('resize',onResize);
+    document.addEventListener('keydown',onKey);
+    poll=setInterval(watch,250);
+    go(0);
+  }
+
+  /* botão no menu lateral (cliente) */
+  var theme=$('#themeBtn');
+  if(theme){
+    var b=document.createElement('button'); b.type='button'; b.className='side-menu-item'; b.id='tourBtn';
+    b.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg><span>Como usar o site</span>';
+    theme.parentNode.insertBefore(b,theme.nextSibling);
+    b.onclick=function(){ click('#sideMenuClose'); setTimeout(function(){start(C,KC);},350); };
+  }
+  /* botão no painel do admin */
+  var lo=$('#btnAdminLogout');
+  if(lo){
+    var a=document.createElement('button'); a.type='button'; a.className='btn btn-outline'; a.id='tourAdminBtn'; a.textContent='Tutorial do admin';
+    lo.parentNode.insertBefore(a,lo);
+    a.onclick=function(){ start(A,KA); };
+  }
+  /* abre sozinho na primeira vez */
+  setTimeout(function(){
+    if(!get(KC) && !document.body.classList.contains('admin-on') && !isHidden('view-home')) start(C,KC);
+  },1800);
+  var av=$('#view-admin');
+  if(av) new MutationObserver(function(){
+    if(!av.classList.contains('hide') && !get(KA) && !active) setTimeout(function(){ if(!av.classList.contains('hide')) start(A,KA); },800);
+  }).observe(av,{attributes:true,attributeFilter:['class']});
+})();
+</script>
+
 </body>
 </html>
